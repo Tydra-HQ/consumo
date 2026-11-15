@@ -111,7 +111,9 @@ function segments() {
     if (l.full) {
       if (prevFull && liters > 0) {
         const km = l.odo - prevFull.odo;
-        if (km > 0) out.push({ loadId: l.id, date: l.date, km, liters, cost, kml: km / liters });
+        // El consumo de este tramo corresponde al combustible cargado en la carga llena ANTERIOR (prevFull)
+        if (km > 0) out.push({ loadId: l.id, date: l.date, fromId: prevFull.id, fromName: prevFull.stationName, fromStation: prevFull.stationId,
+          fromDate: prevFull.date, fromFuel: prevFull.fuel, km, liters, cost, kml: km / liters });
       }
       prevFull = l; liters = 0; cost = 0;
     }
@@ -192,13 +194,13 @@ function renderHome() {
     const diff = all.kml ? last.kml - all.kml : 0;
     const pts = segs.slice(-8).map((s) => s.kml);
     hero.innerHTML = `
-      <span class="lbl">Último tanque</span>
+      <span class="lbl">Último tanque medido</span>
       <div class="row baseline gap8">
         <span class="big">${fmt(last.kml, 1)}</span><span class="unit">km/l</span>
         ${segs.length > 1 ? `<span class="delta">${Math.abs(diff) < 0.05 ? '= promedio' : (diff > 0 ? '▲ ' : '▼ ') + fmt(Math.abs(diff), 1) + ' vs. promedio'}</span>` : ''}
       </div>
       ${pts.length > 1 ? spark(pts) : ''}
-      <span class="lbl">${pts.length > 1 ? 'Últimos ' + pts.length + ' tanques' : 'Primer tanque medido'}</span>`;
+      <span class="lbl">Combustible de ${esc(last.fromName)} (${shortDate(last.fromDate)})</span>`;
   } else {
     hero.innerHTML = `
       <span class="lbl">Bienvenido</span>
@@ -211,19 +213,25 @@ function renderHome() {
     .reduce((a, l) => a + l.total, 0);
   $('#st-month').textContent = month ? money(month) : '$ 0';
 
-  const segBy = Object.fromEntries(segs.map((s) => [s.loadId, s]));
+  const segBy = Object.fromEntries(segs.map((s) => [s.fromId, s]));
+  const inUse = currentTankId();
   const recent = db.loads.slice().sort((a, b) => b.odo - a.odo).slice(0, 3);
-  $('#recent').innerHTML = recent.length ? recent.map((l) => loadRow(l, segBy[l.id])).join('')
+  $('#recent').innerHTML = recent.length ? recent.map((l) => loadRow(l, segBy[l.id], l.id === inUse)).join('')
     : '<div class="empty">Todavía no registraste cargas.</div>';
 }
-function loadRow(l, seg) {
+// Carga llena más reciente: su combustible todavía se está usando, el consumo se conoce en la próxima carga llena
+function currentTankId() {
+  const fulls = db.loads.filter((l) => l.full).sort((a, b) => b.odo - a.odo);
+  return fulls.length ? fulls[0].id : null;
+}
+function loadRow(l, seg, inUse) {
   return `<div class="load">
     <span class="brand">${esc(brandAbbr(l.brand))}</span>
     <div class="col gap2" style="min-width:0">
       <span class="t ellipsis">${esc(l.stationName)}</span>
       <span class="s">${shortDate(l.date)} · ${fmt(l.liters, 1)} l · ${esc(l.fuel)}${l.full ? '' : ' · parcial'}</span>
     </div>
-    <span class="v">${seg ? fmt(seg.kml, 1) + ' km/l' : money(l.total)}</span>
+    <span class="v">${seg ? fmt(seg.kml, 1) + ' km/l' : inUse ? '<span class="muted xs b6">en uso</span>' : money(l.total)}</span>
   </div>`;
 }
 function spark(vals) {
@@ -502,9 +510,10 @@ function renderDone() {
     const max = Math.max(seg.kml, prev.kml || 0) * 1.05;
     main = `
       <div class="col center gap2 rise d2" style="margin-top:8px">
-        <span class="lite small">Consumo de este tanque</span>
+        <span class="lite small">Consumo del tanque anterior</span>
         <div class="row baseline gap8"><span class="done-big">${fmt(seg.kml, 1)}</span><span style="font-size:22px;font-weight:600">km/l</span></div>
         <span class="lite small">equivale a ${fmt(100 / seg.kml, 1)} l cada 100 km</span>
+        <span class="small center-text" style="margin-top:8px;background:rgba(255,255,255,.12);border-radius:12px;padding:8px 12px">⛽ Combustible ${esc(seg.fromFuel)} cargado en <b>${esc(seg.fromName)}</b> el ${shortDate(seg.fromDate)}</span>
       </div>
       <div class="grid3 rise d3" style="width:100%">
         <div class="tile"><b>${fmt(seg.km)}</b><span>km recorridos</span></div>
@@ -514,7 +523,7 @@ function renderDone() {
       ${prev.kml ? `<div class="cmp rise d4">
         <span class="b6 small">Comparado con tu promedio</span>
         <div class="bar-row"><span class="lab">Promedio</span><span class="trk"><i style="width:${prev.kml / max * 100}%;background:#9AA6AE"></i></span><span class="val">${fmt(prev.kml, 1)}</span></div>
-        <div class="bar-row"><span class="lab">Este tanque</span><span class="trk"><i style="width:${seg.kml / max * 100}%;background:#0B6E5A"></i></span><span class="val">${fmt(seg.kml, 1)}</span></div>
+        <div class="bar-row"><span class="lab">Ese tanque</span><span class="trk"><i style="width:${seg.kml / max * 100}%;background:#0B6E5A"></i></span><span class="val">${fmt(seg.kml, 1)}</span></div>
         <span class="accent small b6">${Math.abs(better) < 0.5 ? 'Igual que tu promedio.' : better > 0 ? 'Un ' + fmt(better, 0) + ' % mejor que tu promedio. ¡Bien!' : 'Un ' + fmt(-better, 0) + ' % peor que tu promedio.'}</span>
       </div>` : ''}`;
   } else {
@@ -525,7 +534,7 @@ function renderDone() {
         <div class="tile"><b>${money(l.total)}</b><span>total</span></div>
       </div>
       <p class="lite small center-text rise d3" style="margin:0">${l.full
-        ? 'Este es tu punto de partida. En la próxima carga con tanque lleno vas a ver el consumo.'
+        ? 'Este es tu punto de partida. En la próxima carga con tanque lleno vas a ver cuánto rindió este combustible.'
         : 'Carga parcial guardada. El consumo se calcula cuando vuelvas a llenar el tanque.'}</p>`;
   }
   $('#done-body').innerHTML = `
@@ -542,7 +551,7 @@ function renderHistory() {
   $('#period').innerHTML = PERIODS.map(([lab], i) => `<button class="${i === period ? 'on' : ''}" aria-pressed="${i === period}">${lab}</button>`).join('');
   $$('#period button').forEach((b, i) => b.onclick = () => { period = i; renderHistory(); });
   const from = new Date(); from.setMonth(from.getMonth() - PERIODS[period][1]);
-  const segs = segments().filter((s) => new Date(s.date) >= from);
+  const segs = segments().filter((s) => new Date(s.fromDate) >= from);
   const sum = summary(segs);
   $('#h-avg').textContent = sum.kml ? fmt(sum.kml, 1) : '—';
   $('#chart-line').innerHTML = segs.length >= 2 ? lineChart(segs, sum.kml)
@@ -557,17 +566,19 @@ function renderHistory() {
 
   // Por estación
   const by = {};
-  db.loads.forEach((l) => { const k = l.stationId; by[k] = by[k] || { name: l.stationName, n: 0, l: 0, t: 0 }; by[k].n++; by[k].l += l.liters; by[k].t += l.total; });
+  db.loads.forEach((l) => { const k = l.stationId; by[k] = by[k] || { name: l.stationName, n: 0, l: 0, t: 0, km: 0, sl: 0 }; by[k].n++; by[k].l += l.liters; by[k].t += l.total; });
+  segments().forEach((g) => { const r = by[g.fromStation]; if (r) { r.km += g.km; r.sl += g.liters; } }); // rendimiento del combustible de cada estación
   const rows = Object.values(by).sort((a, b) => b.n - a.n);
-  $('#by-station').innerHTML = rows.length ? rows.map((r) => `<div class="trow"><span class="g ellipsis">${esc(r.name)}</span><span class="muted xs">${r.n} ${r.n === 1 ? 'carga' : 'cargas'}</span><span class="b6" style="width:76px;text-align:right">${money(r.t / r.l)}/l</span></div>`).join('')
+  $('#by-station').innerHTML = rows.length ? `<div class="trow muted xs" style="border-top:none;padding-top:0"><span class="g">Estación</span><span style="width:58px;text-align:right">Rinde</span><span style="width:76px;text-align:right">Precio</span></div>` + rows.map((r) => `<div class="trow"><span class="g col gap2" style="min-width:0"><span class="ellipsis">${esc(r.name)}</span><span class="muted xs">${r.n} ${r.n === 1 ? 'carga' : 'cargas'}</span></span><span class="b6" style="width:58px;text-align:right">${r.sl ? fmt(r.km / r.sl, 1) : '—'}</span><span class="b6" style="width:76px;text-align:right">${money(r.t / r.l)}/l</span></div>`).join('')
     : '<div class="empty">Todavía no hay cargas.</div>';
 
   // Todas las cargas
-  const segBy = Object.fromEntries(segments().map((s) => [s.loadId, s]));
+  const segBy = Object.fromEntries(segments().map((s) => [s.fromId, s]));
+  const inUse = currentTankId();
   const all = db.loads.slice().sort((a, b) => b.odo - a.odo);
   $('#all-loads').innerHTML = all.length ? all.map((l) => `<div class="trow">
       <span class="g col gap2"><span class="b6 ellipsis">${esc(l.stationName)}</span><span class="muted xs">${shortDate(l.date)} · ${fmt(l.odo)} km · ${fmt(l.liters, 1)} l · ${money(l.total)}${l.full ? '' : ' · parcial'}</span></span>
-      <span class="b6">${segBy[l.id] ? fmt(segBy[l.id].kml, 1) : ''}</span>
+      <span class="b6" style="text-align:right">${segBy[l.id] ? fmt(segBy[l.id].kml, 1) + '<br><span class="muted xs">km/l</span>' : l.id === inUse ? '<span class="muted xs">en uso</span>' : ''}</span>
       <button class="del" data-del="${esc(l.id)}" aria-label="Borrar carga"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>
     </div>`).join('') : '<div class="empty">Todavía no hay cargas.</div>';
   $$('#all-loads [data-del]').forEach((b) => b.onclick = () => {
@@ -588,9 +599,9 @@ function lineChart(segs, avg) {
     ${ticks.map((t) => `<line x1="${L}" x2="${W}" y1="${y(t)}" y2="${y(t)}" stroke="#EEF2EF"/><text x="${L - 6}" y="${y(t) + 3}" font-size="10" fill="#5A6772" text-anchor="end">${fmt(t, 0)}</text>`).join('')}
     <line x1="${L}" x2="${W}" y1="${y(avg)}" y2="${y(avg)}" stroke="#E8A33D" stroke-width="1.5" stroke-dasharray="4 4"/>
     <polyline class="chart-line" points="${pts}" fill="none" stroke="#0B6E5A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-    ${segs.map((s, i) => `<circle cx="${x(i)}" cy="${y(s.kml)}" r="3.5" fill="#fff" stroke="#0B6E5A" stroke-width="2"><title>${shortDate(s.date)}: ${fmt(s.kml, 1)} km/l</title></circle>`).join('')}
-    <text x="${L}" y="${H - 6}" font-size="10" fill="#5A6772">${shortDate(segs[0].date)}</text>
-    <text x="${W}" y="${H - 6}" font-size="10" fill="#5A6772" text-anchor="end">${shortDate(segs[segs.length - 1].date)}</text>
+    ${segs.map((s, i) => `<circle cx="${x(i)}" cy="${y(s.kml)}" r="3.5" fill="#fff" stroke="#0B6E5A" stroke-width="2"><title>${esc(s.fromName)} (${shortDate(s.fromDate)}): ${fmt(s.kml, 1)} km/l</title></circle>`).join('')}
+    <text x="${L}" y="${H - 6}" font-size="10" fill="#5A6772">${shortDate(segs[0].fromDate)}</text>
+    <text x="${W}" y="${H - 6}" font-size="10" fill="#5A6772" text-anchor="end">${shortDate(segs[segs.length - 1].fromDate)}</text>
   </svg>`;
 }
 function barChart(months) {
@@ -644,9 +655,9 @@ $('#btn-share').onclick = async () => {
 };
 $('#btn-export').onclick = () => {
   if (!db.loads.length) { toast('Todavía no hay cargas para exportar.'); return; }
-  const segBy = Object.fromEntries(segments().map((s) => [s.loadId, s]));
+  const segBy = Object.fromEntries(segments().map((s) => [s.fromId, s]));
   const dec = (n, d) => (n == null ? '' : Number(n).toFixed(d).replace('.', ','));
-  const head = ['Fecha', 'Estación', 'Combustible', 'Litros', 'Total $', 'Precio/litro', 'Tanque lleno', 'Kilometraje', 'km/l'];
+  const head = ['Fecha', 'Estación', 'Combustible', 'Litros', 'Total $', 'Precio/litro', 'Tanque lleno', 'Kilometraje', 'km/l de este combustible'];
   const rows = db.loads.slice().sort((a, b) => a.odo - b.odo).map((l) => [
     new Date(l.date).toLocaleDateString('es-AR'), l.stationName, l.fuel, dec(l.liters, 2), dec(l.total, 2), dec(l.total / l.liters, 2),
     l.full ? 'Sí' : 'No', l.odo, segBy[l.id] ? dec(segBy[l.id].kml, 2) : '']);
@@ -723,6 +734,16 @@ $('#file-import').onchange = async (e) => {
       } },
      { label: 'Cancelar' }]);
 };
+
+/* ---------------- Botón "atrás" de Android ---------------- */
+const BACK = { step1: 'home', step2: 'step1', step3: 'step2', done: 'home', history: 'home', car: 'home' };
+history.replaceState({ root: true }, '');
+history.pushState({ app: true }, '');
+window.addEventListener('popstate', () => {
+  if (!$('#sheet-bg').classList.contains('hidden')) { closeSheet(); history.pushState({ app: true }, ''); return; }
+  if (current !== 'home' && BACK[current]) { go(BACK[current]); history.pushState({ app: true }, ''); return; }
+  history.back(); // en el inicio: salir de la app
+});
 
 /* ---------------- Arranque ---------------- */
 const RENDER = { home: renderHome, step1: renderStep1, step2: renderStep2, step3: renderStep3, done: renderDone, history: renderHistory, car: renderCar };

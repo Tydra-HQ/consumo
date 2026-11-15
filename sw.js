@@ -1,12 +1,14 @@
 // Service worker: keeps the app working offline.
 // Bump VERSION on every release so phones pick up the new files.
-const VERSION = 'v3-2026-11-15';
-const FILES = ['./', 'index.html', 'styles.css', 'app.js', 'stations.json',
-  'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png',
-  'lib/leaflet/leaflet.js', 'lib/leaflet/leaflet.css'];
+const VERSION = 'v4-2026-11-15';
+const FILES = ['./', 'index.html', 'styles.css', 'app.js', 'stations.json', 'manifest.webmanifest',
+  'icon-192.png', 'icon-512.png', 'leaflet.js', 'leaflet.css'];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));
+  // Each file is cached on its own: one missing file must not break the whole install
+  e.waitUntil(caches.open(VERSION)
+    .then((c) => Promise.all(FILES.map((f) => c.add(f).catch(() => null))))
+    .then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (e) => {

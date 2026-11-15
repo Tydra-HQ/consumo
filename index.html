@@ -6,11 +6,11 @@
 <meta name="theme-color" content="#0B6E5A">
 <title>Mi Consumo</title>
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="icons/icon-192.png">
-<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="lib/leaflet/leaflet.css">
+<link rel="stylesheet" href="leaflet.css">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -169,7 +169,7 @@
 <section class="screen" id="s-history" data-nav="history">
   <div class="pad col gap14 grow scroll">
     <div class="row between center rise">
-      <h1 class="h1">Historial</h1>
+      <div class="row center gap12"><button class="back" data-go="home" aria-label="Volver al inicio"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button><h1 class="h1">Historial</h1></div>
       <div class="seg" id="period"></div>
     </div>
     <div class="card col gap8 rise d1">
@@ -195,7 +195,7 @@
 <!-- ============ MI AUTO ============ -->
 <section class="screen" id="s-car" data-nav="car">
   <div class="pad col gap14 grow scroll">
-    <h1 class="h1 rise">Mi auto</h1>
+    <div class="row center gap12 rise"><button class="back" data-go="home" aria-label="Volver al inicio"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button><h1 class="h1">Mi auto</h1></div>
     <form class="card col gap10 rise d1" id="car-form">
       <div class="grid2">
         <div class="col gap6"><label for="c-brand" class="muted xs b6">Marca</label><input id="c-brand" class="field" placeholder="Toyota"></div>
@@ -246,7 +246,7 @@
 </div>
 <div class="toast hidden" id="toast" role="status"></div>
 </main>
-<script src="lib/leaflet/leaflet.js"></script>
+<script src="leaflet.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
