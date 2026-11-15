@@ -226,7 +226,7 @@ function currentTankId() {
 }
 function loadRow(l, seg, inUse) {
   return `<div class="load">
-    <span class="brand">${esc(brandAbbr(l.brand))}</span>
+    <span class="brand" style="background:${brandColor(l.brand)[0]};color:${brandColor(l.brand)[1]}">${esc(brandAbbr(l.brand))}</span>
     <div class="col gap2" style="min-width:0">
       <span class="t ellipsis">${esc(l.stationName)}</span>
       <span class="s">${shortDate(l.date)} · ${fmt(l.liters, 1)} l · ${esc(l.fuel)}${l.full ? '' : ' · parcial'}</span>
@@ -253,7 +253,7 @@ function renderStep1() {
   if (draft.pos) { showNear(); return; }
   $('#gps-msg').textContent = 'Buscando tu ubicación…';
   $('#near-list').innerHTML = '<div class="empty">Buscando estaciones cercanas…</div>';
-  drawMap([]);
+  $('#map').classList.add('hidden'); updateRoute();
   if (!navigator.geolocation) { gpsFailed('Este navegador no permite usar el GPS.'); return; }
   navigator.geolocation.getCurrentPosition(
     (p) => { draft.pos = { lat: p.coords.latitude, lon: p.coords.longitude, acc: p.coords.accuracy }; showNear(); },
@@ -262,6 +262,7 @@ function renderStep1() {
   );
 }
 function gpsFailed(msg) {
+  $('#map').classList.add('hidden'); updateRoute();
   $('#gps-msg').textContent = msg;
   // Sin GPS: mostrar las estaciones usadas recientemente
   const seen = new Set(), rec = [];
@@ -277,14 +278,11 @@ function gpsFailed(msg) {
 }
 function showNear() {
   const pos = draft.pos;
-  $('#gps-msg').textContent = 'Te ubicamos. Confirmá en qué estación estás.';
-  nearList = STATIONS.map((s) => ({ s, d: distM(pos, s) })).sort((a, b) => a.d - b.d).filter((x) => x.d < 5000).slice(0, 5);
-  $('#near-title').textContent = nearList.length ? 'Estaciones cerca tuyo' : 'No hay estaciones de la base a menos de 5 km';
-  if (!draft.station && nearList.length && nearList[0].d < 300) draft.station = nearList[0].s; // la más cercana, preseleccionada
-  renderOptions('#near-list', nearList);
-  if (!nearList.length) { $('#near-list').innerHTML = ''; $('#search-box').classList.remove('hidden'); }
-  drawMap(nearList);
-  updateNext1();
+  $('#gps-msg').textContent = 'Te ubicamos. Tocá tu estación en el mapa o en la lista. Podés mover el mapa.';
+  const nearest = STATIONS.map((s) => ({ s, d: distM(pos, s) })).sort((a, b) => a.d - b.d).slice(0, 3);
+  if (!draft.station && nearest.length && nearest[0].d < 300) draft.station = nearest[0].s; // la más cercana, preseleccionada
+  initMap(nearest.filter((x) => x.d < 5000));
+  updateNext1(); updateRoute();
 }
 function renderOptions(sel, list) {
   const box = $(sel);
@@ -292,7 +290,7 @@ function renderOptions(sel, list) {
     <button class="opt ${draft.station && draft.station.id === s.id ? 'sel' : ''}" data-i="${i}">
       <span class="dot"></span>
       <span class="col gap2" style="min-width:0">
-        <span class="t">${esc(s.brand)}${s.mine ? '<span class="mine">TUYA</span>' : ''}</span>
+        <span class="t"><span class="bchip" style="background:${brandColor(s.brand)[0]};color:${brandColor(s.brand)[1]}">${esc(s.brand)}</span>${s.mine ? '<span class="mine">TUYA</span>' : ''}</span>
         <span class="s ellipsis">${esc(s.address)} · ${esc(s.city)}</span>
       </span>
       <span class="d">${d == null ? '' : distTxt(d)}</span>
@@ -316,7 +314,7 @@ function refreshSelection() {
   [['#near-list', nearList], ['#search-list', searchList]].forEach(([sel, list]) => {
     $(sel).querySelectorAll('.opt').forEach((b) => { if (draft.station && list[+b.dataset.i] && list[+b.dataset.i].s.id === draft.station.id) b.classList.add('sel'); });
   });
-  refreshPins();
+  refreshPins(); updateRoute();
 }
 function correctStation(s) {
   const p = draft.pos;
@@ -370,42 +368,75 @@ $('#btn-new-site').onclick = () => {
 };
 
 /* Mapa real: Leaflet + OpenStreetMap (necesita internet para las calles; sin conexión la lista sigue funcionando) */
-let lmap = null, lLayer = null, lMarkers = {};
-const pinIcon = (s, sel) => L.divIcon({ className: 'lf-icon', iconSize: null, html: `<span class="lf-pin ${sel ? 'sel' : ''}">${esc(s.brand)}</span>` });
-function drawMap(list) {
+const BRAND_COLORS = { YPF: ['#0055A5', '#fff'], Shell: ['#FFD100', '#14212B'], Axion: ['#6D2077', '#fff'], Puma: ['#D6001C', '#fff'],
+  Blanca: ['#5A6772', '#fff'], Dapsa: ['#C94A05', '#fff'], Gulf: ['#F58025', '#14212B'], Refinor: ['#00843D', '#fff'], VOY: ['#167D72', '#fff'] };
+const brandColor = (b) => BRAND_COLORS[b] || ['#14212B', '#fff'];
+let lmap = null, lPins = null, lMe = null, lMarkers = {};
+const pinIcon = (s, sel) => { const [bg, fg] = brandColor(s.brand);
+  return L.divIcon({ className: 'lf-icon', iconSize: null, html: `<span class="lf-pin ${sel ? 'sel' : ''}" style="--pc:${bg};color:${fg}">${esc(s.brand)}</span>` }); };
+function initMap(nearest) {
   const el = $('#map');
-  if (!draft.pos || typeof L === 'undefined') { el.classList.add('hidden'); return; }
+  if (typeof L === 'undefined') { // sin la librería del mapa: solo lista
+    el.classList.add('hidden'); nearList = nearest; renderOptions('#near-list', nearList); return;
+  }
   el.classList.remove('hidden');
   if (!lmap) {
     lmap = L.map(el, { zoomControl: false, attributionControl: true });
     lmap.attributionControl.setPrefix(false);
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(lmap);
-    lLayer = L.layerGroup().addTo(lmap);
+    lMe = L.layerGroup().addTo(lmap); lPins = L.layerGroup().addTo(lmap);
+    lmap.on('moveend', updateVisible);
   }
-  lLayer.clearLayers(); lMarkers = {};
+  lMe.clearLayers();
   const p = draft.pos;
-  L.circle([p.lat, p.lon], { radius: Math.min(p.acc || 30, 300), color: '#0B6E5A', weight: 1, fillOpacity: .1, interactive: false }).addTo(lLayer);
-  L.marker([p.lat, p.lon], { icon: L.divIcon({ className: 'lf-icon', iconSize: null, html: '<span class="lf-me"></span>' }), interactive: false, zIndexOffset: -100 }).addTo(lLayer);
-  list.forEach((item) => {
-    const s = item.s, sel = !!draft.station && draft.station.id === s.id;
-    const m = L.marker([s.lat, s.lon], { icon: pinIcon(s, sel), title: stationLabel(s), zIndexOffset: sel ? 1000 : 0, keyboard: true });
-    m.on('click', () => pickStation(item, false));
-    m.addTo(lLayer); lMarkers[s.id] = m;
-  });
-  // Encuadre: vos + las 3 estaciones más cercanas
-  const pts = [[p.lat, p.lon]].concat(list.slice(0, 3).map(({ s }) => [s.lat, s.lon]));
+  L.circle([p.lat, p.lon], { radius: Math.min(p.acc || 30, 300), color: '#0B6E5A', weight: 1, fillOpacity: .1, interactive: false }).addTo(lMe);
+  L.marker([p.lat, p.lon], { icon: L.divIcon({ className: 'lf-icon', iconSize: null, html: '<span class="lf-me"></span>' }), interactive: false, zIndexOffset: -100 }).addTo(lMe);
+  // Encuadre inicial: vos + las 3 estaciones más cercanas (o la elegida)
+  const pts = [[p.lat, p.lon]].concat(nearest.map(({ s }) => [s.lat, s.lon]));
+  if (draft.station) pts.push([draft.station.lat, draft.station.lon]);
   setTimeout(() => {
     lmap.invalidateSize();
     if (pts.length > 1) lmap.fitBounds(pts, { padding: [36, 36], maxZoom: 17 });
     else lmap.setView([p.lat, p.lon], 15);
+    updateVisible();
   }, 480);
+}
+// La lista muestra lo mismo que el mapa: las estaciones visibles, la más cercana a vos primero
+function updateVisible() {
+  if (!lmap || current !== 'step1') return;
+  lPins.clearLayers(); lMarkers = {};
+  if (lmap.getZoom() < 12) {
+    nearList = [];
+    $('#near-title').textContent = 'Acercá el mapa para ver estaciones';
+    $('#near-list').innerHTML = '';
+    return;
+  }
+  const b = lmap.getBounds(), ref = draft.pos || { lat: lmap.getCenter().lat, lon: lmap.getCenter().lng };
+  const vis = STATIONS.filter((s) => b.contains([s.lat, s.lon])).map((s) => ({ s, d: distM(ref, s) })).sort((a, b2) => a.d - b2.d);
+  vis.slice(0, 120).forEach((item) => {
+    const s = item.s, sel = !!draft.station && draft.station.id === s.id;
+    const m = L.marker([s.lat, s.lon], { icon: pinIcon(s, sel), title: stationLabel(s), zIndexOffset: sel ? 1000 : 0, keyboard: true });
+    m.on('click', () => pickStation(item, false));
+    m.addTo(lPins); lMarkers[s.id] = { m, s };
+  });
+  nearList = vis.slice(0, 20);
+  $('#near-title').textContent = vis.length ? `Estaciones en el mapa (${vis.length})` : 'No hay estaciones en esta zona del mapa';
+  renderOptions('#near-list', nearList);
+  if (vis.length > 20) $('#near-list').insertAdjacentHTML('beforeend', `<div class="muted xs center-text">y ${vis.length - 20} más: acercá el mapa para verlas</div>`);
 }
 function refreshPins() {
   for (const id in lMarkers) {
     const sel = !!draft.station && draft.station.id === id;
-    const item = nearList.find((x) => x.s.id === id);
-    if (item) { lMarkers[id].setIcon(pinIcon(item.s, sel)); lMarkers[id].setZIndexOffset(sel ? 1000 : 0); }
+    lMarkers[id].m.setIcon(pinIcon(lMarkers[id].s, sel)); lMarkers[id].m.setZIndexOffset(sel ? 1000 : 0);
   }
+}
+// "Cómo llegar": abre Google Maps con el recorrido hasta la estación elegida
+function updateRoute() {
+  const a = $('#route'), s = draft.station;
+  if (!s) { a.classList.add('hidden'); return; }
+  a.href = `https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lon}&travelmode=driving`;
+  a.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l18-8-8 18-2-8z"/></svg><span class="ellipsis">Cómo llegar a ${esc(stationLabel(s))}</span><span aria-hidden="true">↗</span>`;
+  a.classList.remove('hidden');
 }
 
 /* ---------------- PASO 2: combustible ---------------- */

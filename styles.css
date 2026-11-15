@@ -179,9 +179,13 @@ svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-l
 .map.leaflet-container{background:#E4ECE6;font-family:inherit}
 .map .leaflet-control-attribution{font-size:9px;background:rgba(255,255,255,.8)}
 .lf-icon{width:0 !important;height:0 !important;background:none;border:none}
-.lf-pin{position:absolute;left:0;top:0;transform:translate(-50%,calc(-100% - 7px));background:#fff;color:var(--ink);font-size:11px;font-weight:700;border-radius:8px;padding:3px 7px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.25);cursor:pointer;transition:background .2s}
-.lf-pin::after{content:"";position:absolute;left:50%;bottom:-6px;margin-left:-6px;border:6px solid transparent;border-bottom:0;border-top-color:#fff;transition:border-color .2s}
-.lf-pin.sel{background:var(--amber)}.lf-pin.sel::after{border-top-color:var(--amber)}
+.lf-pin{--pc:#fff;position:absolute;left:0;top:0;transform:translate(-50%,calc(-100% - 7px));background:var(--pc);color:var(--ink);border:2px solid #fff;font-size:11px;font-weight:700;border-radius:8px;padding:3px 7px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.25);cursor:pointer;transition:background .2s}
+.lf-pin::after{content:"";position:absolute;left:50%;bottom:-8px;margin-left:-6px;border:6px solid transparent;border-bottom:0;border-top-color:var(--pc)}
+.lf-pin.sel{font-size:13px;padding:5px 10px;border-color:var(--ink);box-shadow:0 0 0 3px rgba(232,163,61,.9),0 4px 10px rgba(0,0,0,.35)}
 .lf-me{position:absolute;left:0;top:0;width:18px;height:18px;transform:translate(-50%,-50%);border-radius:50%;background:var(--green);border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.3)}
 .lf-me::before{content:"";position:absolute;inset:-8px;border-radius:50%;background:var(--green);opacity:.35;animation:ping 1.8s ease-out infinite;z-index:-1}
 .datefield{width:auto;height:44px;font-size:15px;font-weight:600}
+
+.bchip{display:inline-block;border-radius:6px;padding:1px 7px;font-size:12px;font-weight:700}
+.route{display:flex;align-items:center;gap:8px;margin:10px 22px 0;padding:10px 14px;border-radius:14px;background:#fff;color:var(--green);font-size:14px;font-weight:600;text-decoration:none;min-height:44px;box-shadow:0 1px 3px rgba(20,33,43,.08)}
+.route svg{width:18px;height:18px}.route .ellipsis{flex:1;min-width:0}
