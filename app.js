@@ -125,6 +125,16 @@ function summary(segs) {
   return { km, liters, cost, kml: liters ? km / liters : null, cpk: km ? cost / km : null };
 }
 const lastOdo = () => db.loads.reduce((m, l) => Math.max(m, l.odo), 0);
+// Límites del kilometraje según la fecha: mayor que las cargas anteriores, menor que las posteriores
+const dayOf = (iso) => { const d = new Date(iso); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+function odoBounds(day) {
+  let lo = 0, hi = Infinity, prev = null;
+  for (const l of db.loads) {
+    if (dayOf(l.date) <= day) { if (l.odo > lo) { lo = l.odo; prev = l; } }
+    else hi = Math.min(hi, l.odo);
+  }
+  return { lo, hi, prev };
+}
 
 /* ---------------- Navegación ---------------- */
 const SCREENS = { home: 's-home', step1: 's-step1', step2: 's-step2', step3: 's-step3', done: 's-done', history: 's-history', car: 's-car' };
@@ -166,7 +176,8 @@ $$('.tabbar').forEach((nav) => {
 });
 
 /* ---------------- Borrador de la carga en curso ---------------- */
-const newDraft = () => ({ station: null, fuel: db.lastFuel || FUELS[0], liters: '', total: '', full: true, odo: '', pos: null });
+const todayStr = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+const newDraft = () => ({ date: todayStr(), station: null, fuel: db.lastFuel || FUELS[0], liters: '', total: '', full: true, odo: '', pos: null });
 let draft = newDraft();
 
 /* ---------------- INICIO ---------------- */
@@ -297,7 +308,7 @@ function refreshSelection() {
   [['#near-list', nearList], ['#search-list', searchList]].forEach(([sel, list]) => {
     $(sel).querySelectorAll('.opt').forEach((b) => { if (draft.station && list[+b.dataset.i] && list[+b.dataset.i].s.id === draft.station.id) b.classList.add('sel'); });
   });
-  $$('#map .pin').forEach((p) => p.classList.toggle('sel', !!draft.station && p.dataset.id === draft.station.id));
+  refreshPins();
 }
 function correctStation(s) {
   const p = draft.pos;
@@ -350,20 +361,43 @@ $('#btn-new-site').onclick = () => {
      { label: 'Cancelar' }]);
 };
 
+/* Mapa real: Leaflet + OpenStreetMap (necesita internet para las calles; sin conexión la lista sigue funcionando) */
+let lmap = null, lLayer = null, lMarkers = {};
+const pinIcon = (s, sel) => L.divIcon({ className: 'lf-icon', iconSize: null, html: `<span class="lf-pin ${sel ? 'sel' : ''}">${esc(s.brand)}</span>` });
 function drawMap(list) {
-  const map = $('#map');
-  let html = `<div class="road" style="left:-20px;top:42%;width:120%;height:16px;transform:rotate(-8deg)"></div>
-    <div class="road" style="left:38%;top:-20px;width:14px;height:130%;transform:rotate(12deg)"></div>
-    <div class="road" style="left:0;top:80%;width:100%;height:9px;opacity:.6"></div>
-    <div class="road" style="left:70%;top:0;width:9px;height:100%;opacity:.6"></div>`;
-  if (draft.pos) {
-    const p0 = draft.pos, k = Math.cos(p0.lat * Math.PI / 180);
-    const xy = list.map(({ s }) => [(s.lon - p0.lon) * 111320 * k, (s.lat - p0.lat) * 110540]);
-    const maxr = Math.max(60, ...xy.map(([x, y]) => Math.max(Math.abs(x), Math.abs(y))));
-    html += xy.map(([x, y], i) => `<span class="pin ${draft.station && draft.station.id === list[i].s.id ? 'sel' : ''}" data-id="${esc(list[i].s.id)}" style="left:${50 + x / maxr * 40}%;top:${50 - y / maxr * 38}%">${esc(list[i].s.brand)}</span>`).join('');
-    html += `<span class="me-ping"></span><span class="me"></span><span class="acc">GPS · precisión ${Math.round(p0.acc)} m</span>`;
+  const el = $('#map');
+  if (!draft.pos || typeof L === 'undefined') { el.classList.add('hidden'); return; }
+  el.classList.remove('hidden');
+  if (!lmap) {
+    lmap = L.map(el, { zoomControl: false, attributionControl: true });
+    lmap.attributionControl.setPrefix(false);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(lmap);
+    lLayer = L.layerGroup().addTo(lmap);
   }
-  map.innerHTML = html;
+  lLayer.clearLayers(); lMarkers = {};
+  const p = draft.pos;
+  L.circle([p.lat, p.lon], { radius: Math.min(p.acc || 30, 300), color: '#0B6E5A', weight: 1, fillOpacity: .1, interactive: false }).addTo(lLayer);
+  L.marker([p.lat, p.lon], { icon: L.divIcon({ className: 'lf-icon', iconSize: null, html: '<span class="lf-me"></span>' }), interactive: false, zIndexOffset: -100 }).addTo(lLayer);
+  list.forEach((item) => {
+    const s = item.s, sel = !!draft.station && draft.station.id === s.id;
+    const m = L.marker([s.lat, s.lon], { icon: pinIcon(s, sel), title: stationLabel(s), zIndexOffset: sel ? 1000 : 0, keyboard: true });
+    m.on('click', () => pickStation(item, false));
+    m.addTo(lLayer); lMarkers[s.id] = m;
+  });
+  // Encuadre: vos + las 3 estaciones más cercanas
+  const pts = [[p.lat, p.lon]].concat(list.slice(0, 3).map(({ s }) => [s.lat, s.lon]));
+  setTimeout(() => {
+    lmap.invalidateSize();
+    if (pts.length > 1) lmap.fitBounds(pts, { padding: [36, 36], maxZoom: 17 });
+    else lmap.setView([p.lat, p.lon], 15);
+  }, 480);
+}
+function refreshPins() {
+  for (const id in lMarkers) {
+    const sel = !!draft.station && draft.station.id === id;
+    const item = nearList.find((x) => x.s.id === id);
+    if (item) { lMarkers[id].setIcon(pinIcon(item.s, sel)); lMarkers[id].setZIndexOffset(sel ? 1000 : 0); }
+  }
 }
 
 /* ---------------- PASO 2: combustible ---------------- */
@@ -372,6 +406,7 @@ function renderStep2() {
   $('#fuel-hint').textContent = db.lastFuel && draft.fuel === db.lastFuel ? 'Como la última vez' : '';
   $('#fuel-pills').innerHTML = FUELS.map((f) => `<button class="pill ${f === draft.fuel ? 'sel' : ''}" aria-pressed="${f === draft.fuel}">${f}</button>`).join('');
   $$('#fuel-pills .pill').forEach((b, i) => b.onclick = () => { draft.fuel = FUELS[i]; renderStep2(); });
+  $('#in-date').value = draft.date; $('#in-date').max = todayStr();
   $('#in-liters').value = draft.liters;
   $('#in-total').value = draft.total;
   setToggle(draft.full);
@@ -385,6 +420,7 @@ function calcPpl() {
   $('#next2').disabled = !ok;
 }
 $('#in-liters').addEventListener('input', calcPpl);
+$('#in-date').addEventListener('change', (e) => { draft.date = e.target.value && e.target.value <= todayStr() ? e.target.value : todayStr(); e.target.value = draft.date; });
 $('#in-total').addEventListener('input', calcPpl);
 function setToggle(on) {
   const t = $('#tg-full'); t.classList.toggle('on', on); t.setAttribute('aria-checked', on);
@@ -411,24 +447,25 @@ $$('#keypad .key').forEach((b, i) => b.onclick = () => {
   renderStep3();
 });
 function renderStep3() {
-  const n = parseInt(draft.odo || '0', 10), last = lastOdo();
+  const n = parseInt(draft.odo || '0', 10), b = odoBounds(draft.date);
   $('#odo-num').textContent = fmt(n);
   const tag = $('#odo-tag');
-  tag.className = 'odo-tag';
-  if (!draft.odo) tag.textContent = '';
-  else if (last && n > last) { tag.classList.add('ok'); tag.textContent = 'Recorriste ' + fmt(n - last) + ' km desde la última carga'; }
-  else if (last && n <= last && draft.odo.length >= String(last).length) { tag.classList.add('bad'); tag.textContent = 'Es menor que la última carga (' + fmt(last) + ' km)'; }
-  else tag.textContent = '';
-  const lastLoad = db.loads.slice().sort((a, b) => b.odo - a.odo)[0];
-  $('#odo-last').textContent = lastLoad ? 'Última carga: ' + fmt(lastLoad.odo) + ' km · ' + shortDate(lastLoad.date) : 'Primera carga: anotá el kilometraje actual.';
+  tag.className = 'odo-tag'; tag.textContent = '';
+  if (draft.odo) {
+    if (b.lo && n > b.lo && n < b.hi) { tag.classList.add('ok'); tag.textContent = 'Recorriste ' + fmt(n - b.lo) + ' km desde la carga anterior'; }
+    else if (b.lo && n <= b.lo && draft.odo.length >= String(b.lo).length) { tag.classList.add('bad'); tag.textContent = 'Es menor que la carga anterior (' + fmt(b.lo) + ' km)'; }
+    else if (n >= b.hi) { tag.classList.add('bad'); tag.textContent = 'Es mayor que una carga posterior (' + fmt(b.hi) + ' km)'; }
+  }
+  $('#odo-last').textContent = b.prev ? 'Carga anterior: ' + fmt(b.prev.odo) + ' km · ' + shortDate(b.prev.date) : 'Primera carga: anotá el kilometraje actual.';
   $('#save').disabled = !draft.odo;
 }
 $('#save').onclick = () => {
-  const n = parseInt(draft.odo || '0', 10), last = lastOdo();
+  const n = parseInt(draft.odo || '0', 10), b = odoBounds(draft.date);
   if (!n) return;
-  if (last && n <= last) { $('.odo').classList.add('shake'); setTimeout(() => $('.odo').classList.remove('shake'), 400); toast('El kilometraje tiene que ser mayor a ' + fmt(last) + ' km.'); return; }
-  if (last && n - last > 1500) {
-    sheet('¿Es correcto?', `<p class="muted small" style="margin:0">Serían ${fmt(n - last)} km desde la última carga. ¿Lo guardamos igual?</p>`,
+  const bad = (b.lo && n <= b.lo) ? 'El kilometraje tiene que ser mayor a ' + fmt(b.lo) + ' km.' : (n >= b.hi ? 'El kilometraje tiene que ser menor a ' + fmt(b.hi) + ' km (hay una carga posterior).' : '');
+  if (bad) { $('.odo').classList.add('shake'); setTimeout(() => $('.odo').classList.remove('shake'), 400); toast(bad); return; }
+  if (b.lo && n - b.lo > 1500) {
+    sheet('¿Es correcto?', `<p class="muted small" style="margin:0">Serían ${fmt(n - b.lo)} km desde la carga anterior. ¿Lo guardamos igual?</p>`,
       [{ label: 'Sí, guardar', primary: true, run: () => commit(n) }, { label: 'Corregir' }]);
     return;
   }
@@ -438,13 +475,14 @@ let lastSaved = null;
 function commit(odo) {
   const s = draft.station;
   const load = {
-    id: 'l-' + Date.now(), date: new Date().toISOString(),
+    id: 'l-' + Date.now(), date: draft.date === todayStr() ? new Date().toISOString() : new Date(draft.date + 'T12:00:00').toISOString(),
     stationId: s.id, stationName: stationLabel(s), brand: s.brand,
     lat: draft.pos ? draft.pos.lat : null, lon: draft.pos ? draft.pos.lon : null,
     fuel: draft.fuel, liters: parseNum(draft.liters), total: parseNum(draft.total), full: draft.full, odo
   };
+  const newest = odo > lastOdo();
   db.loads.push(load);
-  db.lastFuel = draft.fuel;
+  if (newest) db.lastFuel = draft.fuel; // solo si es la carga más reciente
   save();
   lastSaved = load;
   draft = newDraft();
@@ -493,7 +531,7 @@ function renderDone() {
   $('#done-body').innerHTML = `
     <div class="check-wrap"><span class="check-ring"></span><span class="check-dot"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span></div>
     <h1 class="h1 rise d1" style="font-size:30px;margin-top:6px">¡Carga guardada!</h1>
-    <span class="lite small rise d1">${esc(l.stationName)} · hoy</span>
+    <span class="lite small rise d1">${esc(l.stationName)} · ${dayOf(l.date) === todayStr() ? 'hoy' : shortDate(l.date)}</span>
     ${main}`;
 }
 
@@ -617,6 +655,71 @@ $('#btn-export').onclick = () => {
   a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
   a.download = 'mis-cargas.csv'; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+};
+
+
+/* ---------------- Importar cargas anteriores (CSV) ---------------- */
+// Columnas reconocidas (en cualquier orden): Fecha; Estación; Combustible; Litros; Total; Tanque lleno; Kilometraje
+function parseCSV(text) {
+  text = text.replace(/^﻿/, '');
+  const first = text.split(/\r?\n/)[0];
+  const sep = (first.match(/;/g) || []).length >= (first.match(/,/g) || []).length ? ';' : ',';
+  const rows = []; let row = [], cur = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) { if (c === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += c; }
+    else if (c === '"') q = true;
+    else if (c === sep) { row.push(cur); cur = ''; }
+    else if (c === '\n' || c === '\r') { if (c === '\r' && text[i + 1] === '\n') i++; row.push(cur); rows.push(row); row = []; cur = ''; }
+    else cur += c;
+  }
+  if (cur || row.length) { row.push(cur); rows.push(row); }
+  return rows.filter((r) => r.some((v) => v.trim()));
+}
+function parseDate(v) {
+  v = v.trim(); let m;
+  if ((m = v.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/))) { const y = m[3].length === 2 ? 2000 + +m[3] : +m[3]; return new Date(y, +m[2] - 1, +m[1], 12); }
+  if ((m = v.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/))) return new Date(+m[1], +m[2] - 1, +m[3], 12);
+  return null;
+}
+$('#btn-import').onclick = () => $('#file-import').click();
+$('#file-import').onchange = async (e) => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  let text = await f.text();
+  if (text.includes('�')) text = new TextDecoder('windows-1252').decode(await f.arrayBuffer()); // Excel en español guarda en Latin-1
+  const rows = parseCSV(text);
+  if (rows.length < 2) { toast('El archivo está vacío.'); return; }
+  const head = rows[0].map((h) => norm(h).trim());
+  const col = (...names) => head.findIndex((h) => names.some((n) => h.startsWith(n)));
+  const C = { date: col('fecha'), st: col('estacion', 'lugar'), fuel: col('combustible', 'tipo'), lit: col('litros'), tot: col('total', 'importe', 'monto'), full: col('tanque', 'lleno'), odo: col('kilometraje', 'km', 'odometro') };
+  if (C.date < 0 || C.lit < 0 || C.tot < 0 || C.odo < 0) { toast('Faltan columnas: Fecha, Litros, Total y Kilometraje son obligatorias.'); return; }
+  const have = new Set(db.loads.map((l) => l.odo));
+  const ok = [], bad = [];
+  rows.slice(1).forEach((r, i) => {
+    const d = parseDate(r[C.date] || ''), lit = parseNum(r[C.lit]), tot = parseNum(r[C.tot]), odo = parseInt(String(r[C.odo] || '').replace(/\D/g, ''), 10);
+    if (!d || !(lit > 0) || !(tot > 0) || !(odo > 0)) { bad.push(i + 2); return; }
+    if (have.has(odo)) return; // ya cargada
+    const name = (C.st >= 0 && r[C.st].trim()) || 'Carga importada';
+    const brand = BRANDS.find((b) => norm(name).startsWith(norm(b))) || name.split(/[\s·-]/)[0];
+    const fuelTxt = C.fuel >= 0 ? norm(r[C.fuel] || '') : '';
+    const fuel = FUELS.find((x) => norm(x) === fuelTxt) || (fuelTxt.includes('prem') ? 'Premium' : fuelTxt.includes('dies') || fuelTxt.includes('gasoil') ? 'Diésel' : fuelTxt.includes('gnc') ? 'GNC' : 'Súper');
+    const fv = C.full >= 0 ? norm(r[C.full] || '').trim() : '';
+    ok.push({ id: 'l-imp-' + Date.now() + '-' + i, date: d.toISOString(), stationId: 'imp:' + norm(name), stationName: name, brand,
+      lat: null, lon: null, fuel, liters: lit, total: tot, full: !(fv && /^(no|n|0|false|parcial)/.test(fv)), odo });
+    have.add(odo);
+  });
+  if (!ok.length) { toast(bad.length ? 'No se pudo leer ninguna fila (revisá las filas ' + bad.slice(0, 5).join(', ') + ').' : 'Esas cargas ya estaban registradas.'); return; }
+  ok.sort((a, b) => a.odo - b.odo);
+  sheet('Importar ' + ok.length + (ok.length === 1 ? ' carga' : ' cargas'),
+    `<p class="muted small" style="margin:0">Del ${shortDate(ok[0].date)} (${fmt(ok[0].odo)} km) al ${shortDate(ok[ok.length - 1].date)} (${fmt(ok[ok.length - 1].odo)} km).${bad.length ? ' Se omiten ' + bad.length + ' filas con datos incompletos.' : ''}</p>`,
+    [{ label: 'Importar', primary: true, run: () => {
+        db.loads.push(...ok);
+        const newest = db.loads.slice().sort((a, b) => b.odo - a.odo)[0];
+        if (!db.lastFuel) db.lastFuel = newest.fuel;
+        save(); renderCar(); toast(ok.length + ' cargas importadas.');
+      } },
+     { label: 'Cancelar' }]);
 };
 
 /* ---------------- Arranque ---------------- */

@@ -10,6 +10,7 @@
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="lib/leaflet/leaflet.css">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -92,6 +93,11 @@
     </div>
     <div class="progress" data-step="2"><i></i><i></i><i></i></div>
     <h1 class="h1 big slide">¿Cuánto cargaste?</h1>
+
+    <div class="row center between card rise d1" style="padding:10px 14px">
+      <label for="in-date" class="muted small b6">Fecha de la carga</label>
+      <input id="in-date" class="field datefield" type="date">
+    </div>
 
     <div class="col gap8 rise d1">
       <div class="row between baseline">
@@ -216,6 +222,11 @@
       <span class="ico-box"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg></span>
       <span class="col gap2 grow left"><span class="b6">Exportar a Excel (CSV)</span><span class="muted xs">Todas tus cargas en una planilla.</span></span>
     </button>
+    <button class="card row center gap14 tap rise d3" id="btn-import">
+      <span class="ico-box"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3M7 8l5-5 5 5M5 21h14"/></svg></span>
+      <span class="col gap2 grow left"><span class="b6">Importar cargas anteriores</span><span class="muted xs">Desde una planilla CSV (Excel).</span></span>
+    </button>
+    <input type="file" id="file-import" accept=".csv,text/csv,text/plain" class="hidden">
     <div class="card col gap8 rise d3">
       <div class="row between center"><span class="b6">Comparar con otros conductores</span><span class="badge">Fase 2</span></div>
       <span class="muted xs">Ranking anónimo entre autos del mismo modelo. Próximamente.</span>
@@ -235,6 +246,7 @@
 </div>
 <div class="toast hidden" id="toast" role="status"></div>
 </main>
+<script src="lib/leaflet/leaflet.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
