@@ -1,6 +1,6 @@
 // Service worker: keeps the app working offline.
 // Bump VERSION on every release so phones pick up the new files.
-const VERSION = 'v2-2026-11-15';
+const VERSION = 'v3-2026-11-15';
 const FILES = ['./', 'index.html', 'styles.css', 'app.js', 'stations.json',
   'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png',
   'lib/leaflet/leaflet.js', 'lib/leaflet/leaflet.css'];

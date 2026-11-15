@@ -692,7 +692,7 @@ $('#file-import').onchange = async (e) => {
   if (rows.length < 2) { toast('El archivo está vacío.'); return; }
   const head = rows[0].map((h) => norm(h).trim());
   const col = (...names) => head.findIndex((h) => names.some((n) => h.startsWith(n)));
-  const C = { date: col('fecha'), st: col('estacion', 'lugar'), fuel: col('combustible', 'tipo'), lit: col('litros'), tot: col('total', 'importe', 'monto'), full: col('tanque', 'lleno'), odo: col('kilometraje', 'km', 'odometro') };
+  const C = { date: col('fecha'), st: col('estacion', 'lugar'), fuel: col('combustible', 'tipo'), lit: col('litros'), tot: col('total', 'importe', 'monto'), full: col('tanque', 'lleno'), odo: col('kilometraje', 'km', 'odometro'), sid: col('idempresa', 'id estacion') };
   if (C.date < 0 || C.lit < 0 || C.tot < 0 || C.odo < 0) { toast('Faltan columnas: Fecha, Litros, Total y Kilometraje son obligatorias.'); return; }
   const have = new Set(db.loads.map((l) => l.odo));
   const ok = [], bad = [];
@@ -700,13 +700,15 @@ $('#file-import').onchange = async (e) => {
     const d = parseDate(r[C.date] || ''), lit = parseNum(r[C.lit]), tot = parseNum(r[C.tot]), odo = parseInt(String(r[C.odo] || '').replace(/\D/g, ''), 10);
     if (!d || !(lit > 0) || !(tot > 0) || !(odo > 0)) { bad.push(i + 2); return; }
     if (have.has(odo)) return; // ya cargada
-    const name = (C.st >= 0 && r[C.st].trim()) || 'Carga importada';
-    const brand = BRANDS.find((b) => norm(name).startsWith(norm(b))) || name.split(/[\s·-]/)[0];
+    // Si viene el id de la estación de la base oficial, se vincula a esa estación
+    const known = C.sid >= 0 ? STATIONS.find((x) => x.id === String(r[C.sid] || '').trim()) : null;
+    const name = known ? stationLabel(known) : ((C.st >= 0 && r[C.st].trim()) || 'Carga importada');
+    const brand = known ? known.brand : (BRANDS.find((b) => norm(name).startsWith(norm(b))) || name.split(/[\s·-]/)[0]);
     const fuelTxt = C.fuel >= 0 ? norm(r[C.fuel] || '') : '';
     const fuel = FUELS.find((x) => norm(x) === fuelTxt) || (fuelTxt.includes('prem') ? 'Premium' : fuelTxt.includes('dies') || fuelTxt.includes('gasoil') ? 'Diésel' : fuelTxt.includes('gnc') ? 'GNC' : 'Súper');
     const fv = C.full >= 0 ? norm(r[C.full] || '').trim() : '';
-    ok.push({ id: 'l-imp-' + Date.now() + '-' + i, date: d.toISOString(), stationId: 'imp:' + norm(name), stationName: name, brand,
-      lat: null, lon: null, fuel, liters: lit, total: tot, full: !(fv && /^(no|n|0|false|parcial)/.test(fv)), odo });
+    ok.push({ id: 'l-imp-' + Date.now() + '-' + i, date: d.toISOString(), stationId: known ? known.id : 'imp:' + norm(name), stationName: name, brand,
+      lat: known ? known.lat : null, lon: known ? known.lon : null, fuel, liters: lit, total: tot, full: !(fv && /^(no|n|0|false|parcial)/.test(fv)), odo });
     have.add(odo);
   });
   if (!ok.length) { toast(bad.length ? 'No se pudo leer ninguna fila (revisá las filas ' + bad.slice(0, 5).join(', ') + ').' : 'Esas cargas ya estaban registradas.'); return; }
