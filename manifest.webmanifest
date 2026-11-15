@@ -1,0 +1,16 @@
+{
+  "name": "Mi Consumo – Registro de combustible",
+  "short_name": "Mi Consumo",
+  "description": "Registrá tus cargas de combustible y seguí el consumo de tu auto.",
+  "lang": "es-AR",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F4F6F3",
+  "theme_color": "#0B6E5A",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
