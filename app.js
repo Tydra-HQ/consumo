@@ -141,6 +141,17 @@ function summary(segs) {
   const cost = segs.reduce((a, s) => a + s.cost, 0);
   return { km, liters, cost, kml: liters ? km / liters : null, cpk: km ? cost / km : null };
 }
+// Costo por km a precios de HOY: precio promedio por litro de los últimos 30 días ÷ rendimiento promedio.
+// (Con inflación de 2-3 % mensual, promediar todo el historial subestima el costo actual.)
+function currentCpk() {
+  const kml = summary(segments()).kml;
+  if (!kml || !db.loads.length) return null;
+  const since = Date.now() - 30 * 864e5;
+  let recent = db.loads.filter((l) => new Date(l.date).getTime() >= since);
+  if (!recent.length) recent = [db.loads.slice().sort((a, b) => new Date(b.date) - new Date(a.date))[0]]; // sin cargas en el mes: la última
+  const ppl = recent.reduce((a, l) => a + l.total, 0) / recent.reduce((a, l) => a + l.liters, 0);
+  return ppl / kml;
+}
 const lastOdo = () => db.loads.reduce((m, l) => Math.max(m, l.odo), 0);
 // Límites del kilometraje según la fecha: mayor que las cargas anteriores, menor que las posteriores
 const dayOf = (iso) => { const d = new Date(iso); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
@@ -223,7 +234,8 @@ function renderHome() {
       <span style="font-family:Outfit,sans-serif;font-size:22px;font-weight:700;line-height:1.25">Registrá cada carga y te mostramos cuánto rinde tu auto.</span>
       <span class="lbl">Tip: empezá con el tanque lleno. Desde la siguiente carga completa ya vas a ver tu consumo.</span>`;
   }
-  $('#st-cpk').textContent = all.cpk ? money(all.cpk) : '—';
+  const cpk = currentCpk();
+  $('#st-cpk').textContent = cpk ? money(cpk) : '—';
   const now = new Date();
   const month = db.loads.filter((l) => { const d = new Date(l.date); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); })
     .reduce((a, l) => a + l.total, 0);
@@ -764,7 +776,7 @@ function lineChart(segs, avg) {
   const pts = segs.map((s, i) => x(i).toFixed(1) + ',' + y(s.kml).toFixed(1)).join(' ');
   const ticks = [lo, (lo + hi) / 2, hi];
   return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Consumo en km por litro de cada tanque. Promedio ${fmt(avg, 1)}">
-    ${ticks.map((t) => `<line x1="${L}" x2="${W}" y1="${y(t)}" y2="${y(t)}" stroke="#EEF2EF"/><text x="${L - 6}" y="${y(t) + 3}" font-size="10" fill="#5A6772" text-anchor="end">${fmt(t, 0)}</text>`).join('')}
+    ${ticks.map((t) => `<line x1="${L}" x2="${W}" y1="${y(t)}" y2="${y(t)}" stroke="#EEF2EF"/><text x="${L - 6}" y="${y(t) + 3}" font-size="10" fill="#5A6772" text-anchor="end">${fmt(t, t % 1 ? 1 : 0)}</text>`).join('')}
     <line x1="${L}" x2="${W}" y1="${y(avg)}" y2="${y(avg)}" stroke="#E8A33D" stroke-width="1.5" stroke-dasharray="4 4"/>
     <polyline class="chart-line" points="${pts}" fill="none" stroke="#0B6E5A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
     ${segs.map((s, i) => `<circle cx="${x(i)}" cy="${y(s.kml)}" r="3.5" fill="#fff" stroke="#0B6E5A" stroke-width="2"><title>${esc(s.fromName)} (${shortDate(s.fromDate)}): ${fmt(s.kml, 1)} km/l</title></circle>`).join('')}
@@ -815,7 +827,7 @@ $('#btn-share').onclick = async () => {
   const sum = summary(segments()), c = db.car;
   const car = [c.brand, c.model, c.year].filter(Boolean).join(' ') || 'Mi auto';
   const text = sum.kml
-    ? `${car}: rinde ${fmt(sum.kml, 1)} km/l (${fmt(100 / sum.kml, 1)} l/100 km) en ${fmt(sum.km)} km medidos. Costo: ${money(sum.cpk)} por km. — Mi Consumo`
+    ? `${car}: rinde ${fmt(sum.kml, 1)} km/l (${fmt(100 / sum.kml, 1)} l/100 km) en ${fmt(sum.km)} km medidos. Costo actual: ${money(currentCpk())} por km. — Mi Consumo`
     : `Estoy registrando el consumo de ${car} con Mi Consumo.`;
   try {
     if (navigator.share) await navigator.share({ title: 'Mi consumo', text });

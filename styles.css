@@ -223,3 +223,7 @@ svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-l
 .code{font-family:'Outfit',sans-serif;font-size:28px;font-weight:700;letter-spacing:4px;color:var(--green)}
 .mine-row{background:var(--green-l);border-radius:10px;padding-left:8px;padding-right:8px}
 select.field{appearance:auto}
+
+/* Gráficos: sin el trazo de los íconos (hacía ilegibles los números) */
+#chart-line text,#chart-bars text,#chart-bars rect{stroke:none}
+#chart-line text,#chart-bars text{font-family:'Inter',system-ui,sans-serif;font-weight:500}
