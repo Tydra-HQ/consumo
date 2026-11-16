@@ -371,7 +371,13 @@ function renderTripDetail() {
   const ser = trackSeries(t.track), ref = vspRef() || (ser.km / ser.liters), K = baseK(), scale = K / ref;
   const est = estKml([t]), ppl = recentPpl(), d = new Date(t.start);
   // km/l instantáneo de cada tramo (escalado a tu rendimiento real); detenido = sin dato
-  const pts = ser.pts.map((p) => ({ ...p, kml: p.v < 1 ? null : Math.min(40, (p.d / 1000) / (p.ml / 1000) * scale) }));
+  // km/l instantáneo suavizado: ventana de ~8 s (4 lecturas) para quitar el "ruido" del GPS, como el display del auto
+  const pts = ser.pts.map((p, i, arr) => {
+    if (p.v < 1) return { ...p, kml: null };
+    let d = 0, ml = 0;
+    for (let j = Math.max(0, i - 2); j <= Math.min(arr.length - 1, i + 1); j++) { d += arr[j].d; ml += arr[j].ml; }
+    return { ...p, kml: Math.min(40, (d / 1000) / (ml / 1000) * scale) };
+  });
   body.innerHTML = `
     <div class="card col gap6">
       <span class="b6">${d.getDate()} ${MONTHS[d.getMonth()]} · ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')} · ${fmt(t.km, 1)} km · ${Math.round((new Date(t.end) - d) / 60000)} min</span>

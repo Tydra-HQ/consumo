@@ -948,5 +948,15 @@ loadStations().then(() => { if (current === 'car') renderCar(); });
 go('home');
 
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+  // Buscar versión nueva al abrir y cada vez que se vuelve a la app; cuando llega, recargar solo (una vez)
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((reg) => {
+    reg.update().catch(() => {});
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update().catch(() => {}); });
+  }).catch(() => {});
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (reloaded || !navigator.serviceWorker.controller) return;
+    reloaded = true;
+    if (!['step1', 'step2', 'step3'].includes(current)) location.reload(); // no interrumpir una carga a medio hacer
+  });
 }
