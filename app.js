@@ -257,7 +257,7 @@ function renderStep1() {
   else {
     $('#gps-msg').textContent = 'Buscando tu ubicación…';
     $('#near-list').innerHTML = '<div class="empty">Buscando estaciones cercanas…</div>';
-    $('#map').classList.add('hidden'); updateRoute();
+    $('#map-wrap').classList.add('hidden'); updateRoute();
   }
   startLive();
 }
@@ -272,12 +272,16 @@ function startLive() {
     (err) => { if (!draft.pos) gpsFailed(err.code === 1 ? 'Sin permiso para usar el GPS. Podés buscar la estación a mano.' : 'No pudimos ubicarte. Buscá la estación a mano.'); },
     { enableHighAccuracy: true, timeout: 20000, maximumAge: 3000 });
 }
-function stopLive() { if (watchId != null) { navigator.geolocation.clearWatch(watchId); watchId = null; } lastFix = null; speedNow = 0; wasMoving = false; $('#drive-warn').classList.add('hidden'); }
+function stopLive() { if (watchId != null) { navigator.geolocation.clearWatch(watchId); watchId = null; } if (lmap) setRotation(null); lastHeading = null; lastFix = null; speedNow = 0; wasMoving = false; $('#drive-warn').classList.add('hidden'); }
 function onLivePos(p) {
   const np = { lat: p.coords.latitude, lon: p.coords.longitude, acc: p.coords.accuracy };
   // Velocidad: la del GPS, o calculada entre dos lecturas. Más de ~12 km/h = vas manejando
   let speed = p.coords.speed;
   if ((speed == null || isNaN(speed)) && lastFix) { const dt = (p.timestamp - lastFix.t) / 1000; if (dt > 0) speed = distM(lastFix, np) / dt; }
+  // Rumbo: el del GPS, o calculado entre dos lecturas separadas al menos 10 m
+  let heading = p.coords.heading;
+  if ((heading == null || isNaN(heading)) && lastFix && distM(lastFix, np) > 10) heading = bearing(lastFix, np);
+  if (heading != null && !isNaN(heading)) lastHeading = heading;
   lastFix = { lat: np.lat, lon: np.lon, t: p.timestamp };
   if (speed != null && !isNaN(speed)) { speedNow = speed; if (speed > 1.5) wasMoving = true; $('#drive-warn').classList.toggle('hidden', speed < 3.3); }
   if (!draft.pos) { draft.pos = np; lastLive = Date.now(); showNear(); return; }
@@ -305,6 +309,7 @@ function liveUpdate() {
   if (!lmap) return;
   drawMe();
   if (!userPanned) {
+    if (rotateOn && speedNow > 3.3 && lastHeading != null) setRotation(lastHeading);
     if (wasMoving) {
       const z = zoomForSpeed(speedNow);
       if (z !== lmap.getZoom()) lmap.setView([pos.lat, pos.lon], z, { animate: true });
@@ -316,7 +321,7 @@ function liveUpdate() {
 }
 function gpsFailed(msg) {
   hideHere();
-  $('#map').classList.add('hidden'); updateRoute();
+  $('#map-wrap').classList.add('hidden'); updateRoute();
   $('#gps-msg').textContent = msg;
   // Sin GPS: mostrar las estaciones usadas recientemente
   const seen = new Set(), rec = [];
@@ -432,7 +437,7 @@ function showHere(item) {
   $('#here-brand').innerHTML = `<span class="bchip" style="background:${bg};color:${fg}">${esc(s.brand)}</span>`;
   $('#here-addr').textContent = s.address;
   $('#here-dist').textContent = (s.city ? s.city + ' · ' : '') + 'a ' + distTxt(item.d) + ' de vos';
-  ['#map', '#route', '#pick-list', '#foot1'].forEach((q) => $(q).classList.add('hidden'));
+  ['#map-wrap', '#route', '#pick-list', '#foot1'].forEach((q) => $(q).classList.add('hidden'));
   $('#here').classList.remove('hidden');
 }
 function hideHere() {
@@ -450,6 +455,34 @@ function drawMe() {
   L.marker([p.lat, p.lon], { icon: L.divIcon({ className: 'lf-icon', iconSize: null, html: '<span class="lf-me"></span>' }), interactive: false, zIndexOffset: -100 }).addTo(lMe);
 }
 
+/* Rotación del mapa según el rumbo (solo mientras te sigue y vas en movimiento) */
+let rotateOn = true, rotAcc = 0, rotOn = false, lastHeading = null;
+function setRotation(h) {
+  const el = $('#map'), wrap = $('#map-wrap');
+  if (h == null) { // volver a norte arriba
+    if (!rotOn) return;
+    rotOn = false; rotAcc = 0;
+    el.style.transform = ''; el.style.width = el.style.height = el.style.left = el.style.top = '';
+    el.style.setProperty('--rot', '0deg'); $('#needle').style.transform = '';
+    lmap.invalidateSize({ pan: false }); lmap.dragging.enable(); lmap.panTo([draft.pos.lat, draft.pos.lon], { animate: false });
+    return;
+  }
+  if (!rotOn) { // agrandar el mapa para que al girar no queden esquinas vacías
+    const w = wrap.clientWidth, hh = wrap.clientHeight, d = Math.ceil(Math.hypot(w, hh));
+    Object.assign(el.style, { width: d + 'px', height: d + 'px', left: (w - d) / 2 + 'px', top: (hh - d) / 2 + 'px' });
+    lmap.invalidateSize({ pan: false }); lmap.panTo([draft.pos.lat, draft.pos.lon], { animate: false });
+    lmap.dragging.disable(); rotOn = true;
+  }
+  const cur = ((rotAcc % 360) + 360) % 360;
+  rotAcc += ((h - cur + 540) % 360) - 180; // el giro más corto (sin dar la vuelta entera)
+  el.style.transform = `rotate(${-rotAcc}deg)`;
+  el.style.setProperty('--rot', rotAcc + 'deg');           // las etiquetas quedan derechas
+  $('#needle').style.transform = `rotate(${-rotAcc}deg)`;  // la brújula señala el norte
+}
+const bearing = (a, b) => { const r = Math.PI / 180, y = Math.sin((b.lon - a.lon) * r) * Math.cos(b.lat * r),
+  x = Math.cos(a.lat * r) * Math.sin(b.lat * r) - Math.sin(a.lat * r) * Math.cos(b.lat * r) * Math.cos((b.lon - a.lon) * r);
+  return (Math.atan2(y, x) / r + 360) % 360; };
+
 /* Mapa real: Leaflet + OpenStreetMap (necesita internet para las calles; sin conexión la lista sigue funcionando) */
 const BRAND_COLORS = { YPF: ['#0055A5', '#fff'], Shell: ['#FFD100', '#14212B'], Axion: ['#6D2077', '#fff'], Puma: ['#D6001C', '#fff'],
   Blanca: ['#5A6772', '#fff'], Dapsa: ['#C94A05', '#fff'], Gulf: ['#F58025', '#14212B'], Refinor: ['#00843D', '#fff'], VOY: ['#167D72', '#fff'] };
@@ -460,24 +493,21 @@ const pinIcon = (s, sel) => { const [bg, fg] = brandColor(s.brand);
 function initMap(nearest) {
   const el = $('#map');
   if (typeof L === 'undefined') { // sin la librería del mapa: solo lista
-    el.classList.add('hidden'); nearList = nearest; renderOptions('#near-list', nearList); return;
+    $('#map-wrap').classList.add('hidden'); nearList = nearest; renderOptions('#near-list', nearList); return;
   }
-  el.classList.remove('hidden');
+  $('#map-wrap').classList.remove('hidden');
   if (!lmap) {
-    lmap = L.map(el, { zoomControl: false, attributionControl: true });
-    lmap.attributionControl.setPrefix(false);
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(lmap);
+    lmap = L.map(el, { zoomControl: false, attributionControl: false });
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(lmap);
     lMe = L.layerGroup().addTo(lmap); lPins = L.layerGroup().addTo(lmap);
     lmap.on('moveend', updateVisible);
     lmap.on('dragstart', () => { userPanned = true; $('#recenter').classList.remove('hidden'); });
-    const Rec = L.Control.extend({ options: { position: 'topright' }, onAdd: () => {
-      const b = L.DomUtil.create('button', 'recenter hidden'); b.id = 'recenter'; b.type = 'button';
-      b.setAttribute('aria-label', 'Centrar el mapa en mi ubicación');
-      b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="7"/></svg>';
-      L.DomEvent.disableClickPropagation(b);
-      b.onclick = () => { userPanned = false; b.classList.add('hidden'); lmap.setView([draft.pos.lat, draft.pos.lon], Math.max(lmap.getZoom(), 15)); };
-      return b; } });
-    new Rec().addTo(lmap);
+    $('#recenter').onclick = () => { userPanned = false; $('#recenter').classList.add('hidden'); lmap.setView([draft.pos.lat, draft.pos.lon], Math.max(lmap.getZoom(), 15)); };
+    $('#compass').onclick = () => { // alterna: girar con el rumbo / norte siempre arriba
+      rotateOn = !rotateOn; $('#compass').classList.toggle('locked', !rotateOn);
+      if (!rotateOn) setRotation(null); else if (lastHeading != null && speedNow > 3.3) setRotation(lastHeading);
+      toast(rotateOn ? 'El mapa gira según tu rumbo' : 'Norte siempre arriba');
+    };
   }
   drawMe();
   const p = draft.pos;

@@ -81,7 +81,12 @@
     <button class="btn2" id="here-no" style="height:52px">No, elegir otra estación</button>
   </div>
 
-  <div class="map rise d1" id="map"></div>
+  <div class="map-wrap rise d1 hidden" id="map-wrap">
+    <div class="map" id="map"></div>
+    <button class="map-btn recenter hidden" id="recenter" type="button" aria-label="Centrar el mapa en mi ubicación"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="7"/></svg></button>
+    <button class="map-btn compass" id="compass" type="button" aria-label="Orientación del mapa"><span class="needle" id="needle"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l4 9h-8z" fill="#D6001C" stroke="none"/><path d="M12 21l-4-9h8z" fill="#9AA6AE" stroke="none"/></svg></span></button>
+    <span class="map-attr">© OpenStreetMap</span>
+  </div>
   <a id="route" class="route hidden" target="_blank" rel="noopener"></a>
 
   <div class="pad col gap10 grow scroll" id="pick-list">
