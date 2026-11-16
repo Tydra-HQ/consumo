@@ -69,10 +69,12 @@ async function ensureCar() {
 }
 // Pasa a usar un auto de la nube. Si clear=true, reemplaza las cargas locales por las de ese auto
 function adoptCar(car, clear) {
-  db.carId = car.id;
-  if (car.brand || car.model || !db.car.model) db.car = { brand: car.brand || '', model: car.model || '', year: car.year ? String(car.year) : '', tank: car.tank ? String(car.tank) : '' };
+  db.carId = car.id; db.lastPull = null;
   db.shareStats = car.share_stats !== false;
-  db.carDirty = false; db.lastPull = null;
+  if (car.brand || car.model || !db.car.model) {
+    db.car = { brand: car.brand || '', model: car.model || '', year: car.year ? String(car.year) : '', tank: car.tank ? String(car.tank) : '' };
+    db.carDirty = false;
+  } else db.carDirty = true; // el auto en la nube está vacío: subimos los datos de este teléfono
   if (clear) { db.loads = []; db.dirty = []; db.tombstones = []; }
 }
 
