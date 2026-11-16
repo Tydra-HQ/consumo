@@ -218,3 +218,8 @@ svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-l
 .compass.locked{box-shadow:0 0 0 2px var(--green),0 2px 6px rgba(0,0,0,.25)}
 .map-attr{position:absolute;right:6px;bottom:4px;font-size:9px;color:#5A6772;background:rgba(255,255,255,.8);padding:0 4px;border-radius:4px;z-index:500}
 .lf-pin{transform-origin:0 0;transform:rotate(var(--rot,0deg)) translate(-50%,calc(-100% - 7px)) !important;transition:background .2s}
+
+/* Nube */
+.code{font-family:'Outfit',sans-serif;font-size:28px;font-weight:700;letter-spacing:4px;color:var(--green)}
+.mine-row{background:var(--green-l);border-radius:10px;padding-left:8px;padding-right:8px}
+select.field{appearance:auto}

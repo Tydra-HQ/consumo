@@ -12,8 +12,14 @@ const blank = () => ({
   lastFuel: null,       // último combustible elegido
   userStations: [],     // estaciones agregadas por el usuario (sobreviven a nuevas versiones de la base)
   corrections: {},      // id -> {lat, lon, date}: posiciones corregidas por el usuario
-  suggestions: []       // cola de sugerencias para enviar a la base compartida (fase 2)
+  suggestions: [],      // cola de sugerencias para enviar a la base compartida
+  // Nube (fase 2)
+  carId: null, dirty: [], tombstones: [], lastPull: null, carDirty: false, shareStats: true,
+  overrides: [], nickname: ''
 });
+// Marca una carga como cambiada para subirla a la nube en la próxima sincronización
+function markDirty(id) { if (!db.dirty.includes(id)) db.dirty.push(id); }
+const cloudSoon = () => { if (typeof cloudSync === 'function') setTimeout(cloudSync, 300); };
 
 let db = load();
 function load() {
@@ -42,12 +48,21 @@ async function loadStations() {
   mergeUserLayer();
 }
 function mergeUserLayer() {
-  STATIONS = STATIONS.filter((s) => !s.mine);
+  STATIONS = STATIONS.filter((s) => !s.mine && !s.ov);
+  // Cambios aprobados para todos (vienen de la nube): mueven estaciones existentes o agregan nuevas
+  const byId = new Map(STATIONS.map((s) => [s.id, s]));
+  const ovIds = new Set();
+  for (const o of db.overrides || []) {
+    ovIds.add(o.station_id);
+    const s = byId.get(o.station_id);
+    if (s) { s.lat = o.lat; s.lon = o.lon; if (o.brand) s.brand = o.brand; if (o.address) s.address = o.address; if (o.city) s.city = o.city; }
+    else STATIONS.push({ id: o.station_id, brand: o.brand || 'Otra', address: o.address || '', city: o.city || '', province: o.province || '', lat: o.lat, lon: o.lon, ov: true });
+  }
   for (const s of STATIONS) {
     const c = db.corrections[s.id];
     if (c) { s.lat = c.lat; s.lon = c.lon; s.corrected = true; }
   }
-  for (const u of db.userStations) STATIONS.push(Object.assign({ mine: true }, u));
+  for (const u of db.userStations) if (!ovIds.has(u.id)) STATIONS.push(Object.assign({ mine: true }, u));
   for (const s of STATIONS) s.key = norm([s.brand, s.address, s.city, s.province].join(' '));
 }
 
@@ -634,16 +649,18 @@ let lastSaved = null;
 function commit(odo) {
   const s = draft.station;
   const load = {
-    id: 'l-' + Date.now(), date: draft.date === todayStr() ? new Date().toISOString() : new Date(draft.date + 'T12:00:00').toISOString(),
+    id: 'l-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6), date: draft.date === todayStr() ? new Date().toISOString() : new Date(draft.date + 'T12:00:00').toISOString(),
     stationId: s.id, stationName: stationLabel(s), brand: s.brand,
     lat: draft.pos ? draft.pos.lat : null, lon: draft.pos ? draft.pos.lon : null,
     fuel: draft.fuel, liters: parseNum(draft.liters), total: parseNum(draft.total), full: draft.full, odo
   };
   const newest = odo > lastOdo();
   db.loads.push(load);
+  markDirty(load.id);
   if (newest) db.lastFuel = draft.fuel; // solo si es la carga más reciente
   save();
   lastSaved = load;
+  cloudSoon();
   draft = newDraft();
   go('done');
 }
@@ -735,7 +752,7 @@ function renderHistory() {
   $$('#all-loads [data-del]').forEach((b) => b.onclick = () => {
     const l = db.loads.find((x) => x.id === b.dataset.del);
     sheet('¿Borrar esta carga?', `<p class="muted small" style="margin:0">${esc(l.stationName)} · ${shortDate(l.date)} · ${fmt(l.odo)} km. No se puede deshacer.</p>`,
-      [{ label: 'Borrar', primary: true, run: () => { db.loads = db.loads.filter((x) => x.id !== l.id); save(); renderHistory(); toast('Carga borrada.'); } }, { label: 'Cancelar' }]);
+      [{ label: 'Borrar', primary: true, run: () => { db.loads = db.loads.filter((x) => x.id !== l.id); db.dirty = db.dirty.filter((x) => x !== l.id); db.tombstones.push(l.id); save(); cloudSoon(); renderHistory(); toast('Carga borrada.'); } }, { label: 'Cancelar' }]);
   });
 }
 function lineChart(segs, avg) {
@@ -785,11 +802,12 @@ function renderCar() {
   const mine = db.userStations.length, fixed = Object.keys(db.corrections).length;
   $('#db-info').textContent = `Base de estaciones ${stationsVersion} · ${fmt(officialCount)} estaciones` +
     (mine ? ` · ${mine} agregada${mine > 1 ? 's' : ''} por vos` : '') + (fixed ? ` · ${fixed} corregida${fixed > 1 ? 's' : ''}` : '');
+  if (typeof renderCloud === 'function') renderCloud();
 }
 $('#car-form').onsubmit = (e) => {
   e.preventDefault();
   db.car = { brand: $('#c-brand').value.trim(), model: $('#c-model').value.trim(), year: $('#c-year').value.trim(), tank: $('#c-tank').value.trim() };
-  save();
+  db.carDirty = true; save(); cloudSoon();
   $('#car-saved').classList.remove('hidden');
   toast('Auto guardado.');
 };
@@ -878,10 +896,10 @@ $('#file-import').onchange = async (e) => {
   sheet('Importar ' + ok.length + (ok.length === 1 ? ' carga' : ' cargas'),
     `<p class="muted small" style="margin:0">Del ${shortDate(ok[0].date)} (${fmt(ok[0].odo)} km) al ${shortDate(ok[ok.length - 1].date)} (${fmt(ok[ok.length - 1].odo)} km).${bad.length ? ' Se omiten ' + bad.length + ' filas con datos incompletos.' : ''}</p>`,
     [{ label: 'Importar', primary: true, run: () => {
-        db.loads.push(...ok);
+        db.loads.push(...ok); ok.forEach((l) => markDirty(l.id));
         const newest = db.loads.slice().sort((a, b) => b.odo - a.odo)[0];
         if (!db.lastFuel) db.lastFuel = newest.fuel;
-        save(); renderCar(); toast(ok.length + ' cargas importadas.');
+        save(); renderCar(); cloudSoon(); toast(ok.length + ' cargas importadas.');
       } },
      { label: 'Cancelar' }]);
 };
