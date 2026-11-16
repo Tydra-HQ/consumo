@@ -154,6 +154,7 @@ function go(name) {
   void next.offsetWidth;
   next.classList.add('active');
   next.classList.remove('back-anim');
+  if (current === 'step1' && name !== 'step1') stopLive();
   current = name;
   (RENDER[name] || (() => {}))();
   const sc = next.querySelector('.scroll'); if (sc) sc.scrollTop = 0;
@@ -251,16 +252,59 @@ function renderStep1() {
   $('#search-input').value = '';
   $('#search-list').innerHTML = '';
   updateNext1();
-  if (draft.pos) { showNear(); return; }
-  $('#gps-msg').textContent = 'Buscando tu ubicación…';
-  $('#near-list').innerHTML = '<div class="empty">Buscando estaciones cercanas…</div>';
-  $('#map').classList.add('hidden'); updateRoute();
   if (!navigator.geolocation) { gpsFailed('Este navegador no permite usar el GPS.'); return; }
-  navigator.geolocation.getCurrentPosition(
-    (p) => { draft.pos = { lat: p.coords.latitude, lon: p.coords.longitude, acc: p.coords.accuracy }; showNear(); },
-    (err) => gpsFailed(err.code === 1 ? 'Sin permiso para usar el GPS. Podés buscar la estación a mano.' : 'No pudimos ubicarte. Buscá la estación a mano.'),
-    { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
-  );
+  if (draft.pos) showNear();
+  else {
+    $('#gps-msg').textContent = 'Buscando tu ubicación…';
+    $('#near-list').innerHTML = '<div class="empty">Buscando estaciones cercanas…</div>';
+    $('#map').classList.add('hidden'); updateRoute();
+  }
+  startLive();
+}
+/* GPS en vivo: mientras estás en el Paso 1, el mapa y la lista se actualizan a medida que te movés */
+let watchId = null, lastLive = 0, userPanned = false, lastFix = null, speedNow = 0;
+function startLive() {
+  stopLive();
+  userPanned = false;
+  watchId = navigator.geolocation.watchPosition(onLivePos,
+    (err) => { if (!draft.pos) gpsFailed(err.code === 1 ? 'Sin permiso para usar el GPS. Podés buscar la estación a mano.' : 'No pudimos ubicarte. Buscá la estación a mano.'); },
+    { enableHighAccuracy: true, timeout: 20000, maximumAge: 3000 });
+}
+function stopLive() { if (watchId != null) { navigator.geolocation.clearWatch(watchId); watchId = null; } lastFix = null; speedNow = 0; $('#drive-warn').classList.add('hidden'); }
+function onLivePos(p) {
+  const np = { lat: p.coords.latitude, lon: p.coords.longitude, acc: p.coords.accuracy };
+  // Velocidad: la del GPS, o calculada entre dos lecturas. Más de ~12 km/h = vas manejando
+  let speed = p.coords.speed;
+  if ((speed == null || isNaN(speed)) && lastFix) { const dt = (p.timestamp - lastFix.t) / 1000; if (dt > 0) speed = distM(lastFix, np) / dt; }
+  lastFix = { lat: np.lat, lon: np.lon, t: p.timestamp };
+  if (speed != null && !isNaN(speed)) { speedNow = speed; $('#drive-warn').classList.toggle('hidden', speed < 3.3); }
+  if (!draft.pos) { draft.pos = np; lastLive = Date.now(); showNear(); return; }
+  const moved = distM(draft.pos, np);
+  if (moved < 8 && Date.now() - lastLive < 10000) return; // sin cambios relevantes
+  draft.pos = np; lastLive = Date.now();
+  liveUpdate();
+}
+function liveUpdate() {
+  const pos = draft.pos;
+  const nearest = STATIONS.map((s) => ({ s, d: distM(pos, s) })).sort((a, b) => a.d - b.d)[0];
+  const close = Math.max(60, Math.min(pos.acc || 0, 100));
+  const hereOn = !$('#here').classList.contains('hidden');
+  if (!draft.manualPick && nearest && nearest.d <= close && speedNow < 2.5) { // solo si estás detenido o casi
+    // Llegaste a una estación: mostramos la tarjeta "Estás en…"
+    if (!hereOn || draft.station.id !== nearest.s.id) { showHere(nearest); if (navigator.vibrate) navigator.vibrate(120); }
+    else $('#here-dist').textContent = (nearest.s.city ? nearest.s.city + ' · ' : '') + 'a ' + distTxt(nearest.d) + ' de vos';
+    return;
+  }
+  if (hereOn && (!nearest || nearest.d > close)) { // te alejaste de la estación detectada
+    draft.station = null; hideHere();
+    initMap([]); updateNext1(); updateRoute();
+    return;
+  }
+  if (!lmap) return;
+  drawMe();
+  if (!userPanned) lmap.panTo([pos.lat, pos.lon], { animate: true });
+  else updateVisible();
+  $('#gps-msg').innerHTML = '<span class="live-dot"></span>Siguiendo tu ubicación en vivo. Tocá tu estación o esperá a llegar.';
 }
 function gpsFailed(msg) {
   hideHere();
@@ -280,7 +324,7 @@ function gpsFailed(msg) {
 }
 function showNear() {
   const pos = draft.pos;
-  $('#gps-msg').textContent = 'Te ubicamos. Tocá tu estación en el mapa o en la lista. Podés mover el mapa.';
+  $('#gps-msg').innerHTML = '<span class="live-dot"></span>Siguiendo tu ubicación en vivo. Tocá tu estación o esperá a llegar.';
   const nearest = STATIONS.map((s) => ({ s, d: distM(pos, s) })).sort((a, b) => a.d - b.d).slice(0, 3);
   // Si estás prácticamente en una estación (a pocos metros), preguntamos directamente
   const close = Math.max(60, Math.min(pos.acc || 0, 100));
@@ -390,6 +434,14 @@ function hideHere() {
 $('#here-yes').onclick = () => go('step2');
 $('#here-no').onclick = () => { draft.manualPick = true; draft.station = null; showNear(); };
 
+function drawMe() {
+  if (!lMe) return;
+  lMe.clearLayers();
+  const p = draft.pos;
+  L.circle([p.lat, p.lon], { radius: Math.min(p.acc || 30, 300), color: '#0B6E5A', weight: 1, fillOpacity: .1, interactive: false }).addTo(lMe);
+  L.marker([p.lat, p.lon], { icon: L.divIcon({ className: 'lf-icon', iconSize: null, html: '<span class="lf-me"></span>' }), interactive: false, zIndexOffset: -100 }).addTo(lMe);
+}
+
 /* Mapa real: Leaflet + OpenStreetMap (necesita internet para las calles; sin conexión la lista sigue funcionando) */
 const BRAND_COLORS = { YPF: ['#0055A5', '#fff'], Shell: ['#FFD100', '#14212B'], Axion: ['#6D2077', '#fff'], Puma: ['#D6001C', '#fff'],
   Blanca: ['#5A6772', '#fff'], Dapsa: ['#C94A05', '#fff'], Gulf: ['#F58025', '#14212B'], Refinor: ['#00843D', '#fff'], VOY: ['#167D72', '#fff'] };
@@ -409,11 +461,18 @@ function initMap(nearest) {
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(lmap);
     lMe = L.layerGroup().addTo(lmap); lPins = L.layerGroup().addTo(lmap);
     lmap.on('moveend', updateVisible);
+    lmap.on('dragstart', () => { userPanned = true; $('#recenter').classList.remove('hidden'); });
+    const Rec = L.Control.extend({ options: { position: 'topright' }, onAdd: () => {
+      const b = L.DomUtil.create('button', 'recenter hidden'); b.id = 'recenter'; b.type = 'button';
+      b.setAttribute('aria-label', 'Centrar el mapa en mi ubicación');
+      b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="7"/></svg>';
+      L.DomEvent.disableClickPropagation(b);
+      b.onclick = () => { userPanned = false; b.classList.add('hidden'); lmap.setView([draft.pos.lat, draft.pos.lon], Math.max(lmap.getZoom(), 15)); };
+      return b; } });
+    new Rec().addTo(lmap);
   }
-  lMe.clearLayers();
+  drawMe();
   const p = draft.pos;
-  L.circle([p.lat, p.lon], { radius: Math.min(p.acc || 30, 300), color: '#0B6E5A', weight: 1, fillOpacity: .1, interactive: false }).addTo(lMe);
-  L.marker([p.lat, p.lon], { icon: L.divIcon({ className: 'lf-icon', iconSize: null, html: '<span class="lf-me"></span>' }), interactive: false, zIndexOffset: -100 }).addTo(lMe);
   // Encuadre inicial: vos + las 3 estaciones más cercanas (o la elegida)
   const pts = [[p.lat, p.lon]].concat(nearest.map(({ s }) => [s.lat, s.lon]));
   if (draft.station) pts.push([draft.station.lat, draft.station.lon]);
