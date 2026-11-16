@@ -179,7 +179,7 @@ $$('.tabbar').forEach((nav) => {
 
 /* ---------------- Borrador de la carga en curso ---------------- */
 const todayStr = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
-const newDraft = () => ({ date: todayStr(), station: null, fuel: db.lastFuel || FUELS[0], liters: '', total: '', full: true, odo: '', pos: null });
+const newDraft = () => ({ date: todayStr(), manualPick: false, station: null, fuel: db.lastFuel || FUELS[0], liters: '', total: '', full: true, odo: '', pos: null });
 let draft = newDraft();
 
 /* ---------------- INICIO ---------------- */
@@ -246,6 +246,7 @@ function spark(vals) {
 /* ---------------- PASO 1: ubicación ---------------- */
 let nearList = [];
 function renderStep1() {
+  hideHere();
   $('#search-box').classList.add('hidden');
   $('#search-input').value = '';
   $('#search-list').innerHTML = '';
@@ -262,6 +263,7 @@ function renderStep1() {
   );
 }
 function gpsFailed(msg) {
+  hideHere();
   $('#map').classList.add('hidden'); updateRoute();
   $('#gps-msg').textContent = msg;
   // Sin GPS: mostrar las estaciones usadas recientemente
@@ -280,7 +282,11 @@ function showNear() {
   const pos = draft.pos;
   $('#gps-msg').textContent = 'Te ubicamos. Tocá tu estación en el mapa o en la lista. Podés mover el mapa.';
   const nearest = STATIONS.map((s) => ({ s, d: distM(pos, s) })).sort((a, b) => a.d - b.d).slice(0, 3);
-  if (!draft.station && nearest.length && nearest[0].d < 300) draft.station = nearest[0].s; // la más cercana, preseleccionada
+  // Si estás prácticamente en una estación (a pocos metros), preguntamos directamente
+  const close = Math.max(60, Math.min(pos.acc || 0, 100));
+  if (!draft.manualPick && nearest.length && nearest[0].d <= close) { showHere(nearest[0]); return; }
+  hideHere();
+  if (!draft.station && !draft.manualPick && nearest.length && nearest[0].d < 300) draft.station = nearest[0].s; // la más cercana, preseleccionada
   initMap(nearest.filter((x) => x.d < 5000));
   updateNext1(); updateRoute();
 }
@@ -366,6 +372,23 @@ $('#btn-new-site').onclick = () => {
       } },
      { label: 'Cancelar' }]);
 };
+
+function showHere(item) {
+  const s = item.s, [bg, fg] = brandColor(s.brand);
+  draft.station = s;
+  $('#gps-msg').textContent = 'Te encontramos en una estación.';
+  $('#here-brand').innerHTML = `<span class="bchip" style="background:${bg};color:${fg}">${esc(s.brand)}</span>`;
+  $('#here-addr').textContent = s.address;
+  $('#here-dist').textContent = (s.city ? s.city + ' · ' : '') + 'a ' + distTxt(item.d) + ' de vos';
+  ['#map', '#route', '#pick-list', '#foot1'].forEach((q) => $(q).classList.add('hidden'));
+  $('#here').classList.remove('hidden');
+}
+function hideHere() {
+  $('#here').classList.add('hidden');
+  ['#pick-list', '#foot1'].forEach((q) => $(q).classList.remove('hidden'));
+}
+$('#here-yes').onclick = () => go('step2');
+$('#here-no').onclick = () => { draft.manualPick = true; draft.station = null; showNear(); };
 
 /* Mapa real: Leaflet + OpenStreetMap (necesita internet para las calles; sin conexión la lista sigue funcionando) */
 const BRAND_COLORS = { YPF: ['#0055A5', '#fff'], Shell: ['#FFD100', '#14212B'], Axion: ['#6D2077', '#fff'], Puma: ['#D6001C', '#fff'],

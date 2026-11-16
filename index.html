@@ -65,10 +65,22 @@
     <p class="muted small slide d1" id="gps-msg">Buscando tu ubicación…</p>
   </div>
 
+  <div class="pad col gap14 grow hidden" id="here">
+    <div class="here-card">
+      <div class="here-pin"><span class="here-ring"></span><span class="here-dot"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v16"/><path d="M3 21h13"/><path d="M6 8h7"/><path d="M15 9h2a2 2 0 0 1 2 2v6a1.5 1.5 0 0 0 3 0V8l-3-3"/></svg></span></div>
+      <span class="muted small b6">Estás en</span>
+      <span id="here-brand"></span>
+      <span class="here-addr" id="here-addr"></span>
+      <span class="muted xs" id="here-dist"></span>
+    </div>
+    <button class="next amber" id="here-yes"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg> Sí, estoy acá</button>
+    <button class="btn2" id="here-no" style="height:52px">No, elegir otra estación</button>
+  </div>
+
   <div class="map rise d1" id="map"></div>
   <a id="route" class="route hidden" target="_blank" rel="noopener"></a>
 
-  <div class="pad col gap10 grow scroll">
+  <div class="pad col gap10 grow scroll" id="pick-list">
     <span class="muted small b6" id="near-title">Estaciones cerca tuyo</span>
     <div class="col gap10" id="near-list"></div>
     <button class="link left" id="btn-search">No está en la lista · Buscar estación</button>
@@ -80,7 +92,7 @@
     </div>
   </div>
 
-  <div class="foot">
+  <div class="foot" id="foot1">
     <button class="next" id="next1" disabled>Siguiente <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
   </div>
 </section>
