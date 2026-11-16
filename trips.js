@@ -12,6 +12,7 @@ const SENSOR_JERK = 4.0;                                   // movimiento brusco 
 const END_AFTER_STOP = 4 * 60e3;                           // fin automático tras 4 min detenido
 const GAP_CLOSE = 6 * 60e3;                                // si la app estuvo cerrada más de esto, se cierra el viaje
 
+let vBuf = [], lastTrackT = 0;
 let trip = null, tripWatch = null, lastPt = null, stoppedSince = null, wakeLock = null, motionOn = false, charging = null;
 const cfg = () => db.tripCfg || (db.tripCfg = { on: false, mode: 'manual', sensor: true });
 
@@ -60,10 +61,11 @@ function stopTripEngine(saveTrip) { if (trip) endTrip(saveTrip); stopWatch(); }
 function newTrip(t) {
   return { id: 't-' + t + '-' + Math.random().toString(36).slice(2, 5), start: new Date(t).toISOString(), end: null, mode: cfg().mode,
     km: 0, movingSec: 0, idleSec: 0, cityKm: 0, aveKm: 0, hwyKm: 0, citySec: 0, aveSec: 0, hwySec: 0,
-    maxKmh: 0, over120Km: 0, starts: 0, hardStarts: 0, hardAccel: 0, hardBrakes: 0, stops: 0, abrupt: 0, kind: null, include: null };
+    maxKmh: 0, over120Km: 0, starts: 0, hardStarts: 0, hardAccel: 0, hardBrakes: 0, stops: 0, abrupt: 0, kind: null, include: null,
+    t0: t, track: [] }; // track: [segundos desde el inicio, lat, lon, velocidad m/s] cada ~2 s (solo en este teléfono)
 }
 function beginTrip(t) {
-  trip = newTrip(t || Date.now()); stoppedSince = null;
+  trip = newTrip(t || Date.now()); stoppedSince = null; lastTrackT = 0;
   startWatch(); keepAwake(true); setMotion(cfg().sensor);
   renderTripChip(); toast('Viaje iniciado.');
 }
@@ -74,7 +76,9 @@ function endTrip(keep) {
   if (keep && t.km >= 0.3) {
     t.kind = guessKind(t);
     t.include = t.kind === 'auto'; // los viajes que parecen en auto cuentan; el resto, no (se puede cambiar)
-    db.trips.unshift(t); db.trips = db.trips.slice(0, 500); save();
+    db.trips.unshift(t); db.trips = db.trips.slice(0, 500);
+    db.trips.forEach((x, i) => { if (i >= 30 && x.track) delete x.track; }); // el recorrido detallado se guarda para los últimos 30 viajes
+    save();
     toast(`Viaje guardado: ${fmt(t.km, 1)} km.`);
   }
   if (cfg().mode === 'manual') stopWatch();
@@ -99,6 +103,9 @@ function onTripPos(p) {
   if ((v == null || isNaN(v)) && dt > 0) v = d / dt;
   if (v == null || isNaN(v)) v = 0;
   pt.v = v;
+  // Velocidad suavizada (promedio de las últimas 3 lecturas): el GPS "salta" y falsearía aceleraciones
+  vBuf.push(v); if (vBuf.length > 3) vBuf.shift();
+  pt.vs = vBuf.reduce((a, b) => a + b, 0) / vBuf.length;
 
   // Inicio automático
   if (!trip && (c.mode === 'auto' || c.mode === 'charging') && v > START_SPEED && (!lastPt || lastPt.v > START_SPEED)) {
@@ -116,8 +123,8 @@ function onTripPos(p) {
       if (vAvg * KMH > 120) trip.over120Km += km;
     }
     trip.maxKmh = Math.max(trip.maxKmh, v * KMH);
-    if (dt <= 3) { // aceleración entre lecturas cercanas
-      const a = (v - lastPt.v) / dt;
+    if (dt >= 0.8 && dt <= 3) { // aceleración entre lecturas cercanas, con velocidad suavizada
+      const a = (pt.vs - (lastPt.vs ?? lastPt.v)) / dt;
       const fromStop = lastPt.v < STOP_SPEED && v >= STOP_SPEED;
       if (fromStop) { trip.starts++; if (a > HARSH_ACC) trip.hardStarts++; }
       else if (a > HARSH_ACC) trip.hardAccel++;
@@ -127,6 +134,7 @@ function onTripPos(p) {
     // Fin automático: detenido un rato
     if (v < STOP_SPEED) { stoppedSince = stoppedSince || pt.t; if ((c.mode === 'auto' || c.mode === 'charging') && pt.t - stoppedSince > END_AFTER_STOP) { trip.end = new Date(stoppedSince).toISOString(); lastPt = pt; endTrip(true); return; } }
     else stoppedSince = null;
+    if (pt.t - lastTrackT >= 2000) { trip.track.push([Math.round((pt.t - trip.t0) / 1000), +pt.lat.toFixed(5), +pt.lon.toFixed(5), +pt.vs.toFixed(1)]); lastTrackT = pt.t; }
     if (current === 'home') renderTripChip();
   }
   lastPt = pt;
@@ -220,8 +228,47 @@ function tankDrivingLine(seg) {
    cada arranque fuerte / frenada brusca cada 100 km suma ~0,5 % (tope 10 %).
    Al cerrar cada tanque se compara con el real y se calibra (promedio de los últimos 5 tanques). */
 const baseK = () => summary(segments()).kml || 10;
+/* Consumo instantáneo con "potencia específica del vehículo" (VSP, modelo de la EPA de EE. UU.):
+   VSP [kW/t] = v·(1,1·a + 0,132) + 0,000302·v³   → energía para acelerar, rodar y vencer el aire.
+   Combustible [ml/s] ≈ 0,22 (ralentí, ~0,8 l/h) + 0,16 · VSP positiva. Luego se escala a TU rendimiento real. */
+function trackSeries(track) {
+  const out = []; let ml = 0, m = 0;
+  for (let i = 1; i < (track || []).length; i++) {
+    const [t0, la0, lo0, v0] = track[i - 1], [t1, la1, lo1, v1] = track[i];
+    const dt = t1 - t0; if (dt <= 0 || dt > 30) continue;
+    const v = (v0 + v1) / 2, a = (v1 - v0) / dt, d = distM({ lat: la0, lon: lo0 }, { lat: la1, lon: lo1 });
+    const vsp = v * (1.1 * a + 0.132) + 0.000302 * v * v * v;
+    const f = (0.22 + 0.16 * Math.max(0, vsp)) * dt; // ml en este tramo
+    ml += f; m += d;
+    out.push({ t: t1, v, d, ml: f, la0, lo0, la1, lo1 });
+  }
+  return { km: m / 1000, liters: ml / 1000, pts: out };
+}
+// Referencia fija: lo que da el modelo en un recorrido "típico" (ciudad con semáforos + avenida + ruta).
+// Cada viaje se compara contra ese recorrido típico y se lleva a TU km/l real; las cargas de combustible
+// después corrigen cualquier sesgo (calibración).
+let _ref = null;
+function vspRef() {
+  if (_ref) return _ref;
+  const tr = []; let t = 0, x = 0, v = 0;
+  const go = (target, acc, secs) => { // acelera/frena hasta target y lo mantiene secs segundos
+    while (Math.abs(v - target) > 0.01) { v = v < target ? Math.min(target, v + acc * 2) : Math.max(target, v - 1.5 * 2); x += v * 2; t += 2; tr.push([t, -34 - x / 111000, -58, v]); }
+    for (let i = 0; i < secs / 2; i++) { x += v * 2; t += 2; tr.push([t, -34 - x / 111000, -58, v]); }
+  };
+  tr.push([0, -34, -58, 0]);
+  for (let i = 0; i < 6; i++) { go(11, 1.2, 20); go(0, 1, 16); } // ciudad: hasta 40 km/h y semáforo
+  go(17, 1, 120); go(0, 1, 10);                                   // avenida a 60 km/h
+  go(28, 0.9, 300); go(0, 1, 6);                                  // ruta a 100 km/h
+  const sres = trackSeries(tr);
+  _ref = sres.km / sres.liters;
+  return _ref;
+}
 function rawLiters(t) {
   const K = baseK();
+  if (t.track && t.track.length > 3) { // con recorrido: modelo instantáneo
+    const s = trackSeries(t.track), ref = vspRef();
+    if (s.liters > 0 && ref) return s.liters * ref / K;
+  }
   const hwyNormal = Math.max(0, t.hwyKm - (t.over120Km || 0));
   let l = t.cityKm / (K * 0.8) + t.aveKm / K + hwyNormal / (K * 1.12) + (t.over120Km || 0) / (K * 0.9) + t.idleSec / 3600 * 0.8;
   const ev = t.km ? (t.hardStarts + t.hardAccel + t.hardBrakes) / t.km * 100 : 0;
@@ -299,19 +346,80 @@ function renderTrips() {
       ${(() => { if (t.kind !== 'auto') return ''; const e = estKml([t]); if (!e) return ''; const l = t.km / e, ppl = recentPpl();
         return `<span class="small">Consumo estimado: <b>${fmt(e, 1)} km/l</b> · ${fmt(l, 1)} l${ppl ? ' · ' + money(l * ppl) : ''}${score(s) != null ? ' · puntaje ' + score(s) + '/100' : ''}</span>`; })()}
       ${bandBar(s)}
+      ${t.track && t.track.length > 3 ? `<button class="link left" data-tview="${t.id}" style="padding:0;min-height:36px">Ver recorrido y consumo instantáneo ›</button>` : ''}
       <label class="row center gap10 xs" style="cursor:pointer"><input type="checkbox" data-tinc="${t.id}" ${t.include ? 'checked' : ''} style="width:20px;height:20px;accent-color:#0B6E5A"> Manejé yo este auto (contar en la evaluación)</label>
     </div>`;
   }).join('');
 
   body.innerHTML = (tankHtml ? `<h2 class="h2">Por tanque</h2>${tankHtml}` : '') + `<h2 class="h2">Viajes</h2>${list}`;
+  body.querySelectorAll('[data-tview]').forEach((b) => b.onclick = () => { tripView = b.dataset.tview; go('trip'); });
   body.querySelectorAll('[data-tinc]').forEach((cb) => cb.onchange = () => { const t = db.trips.find((x) => x.id === cb.dataset.tinc); t.include = cb.checked; save(); renderTrips(); });
   body.querySelectorAll('[data-tdel]').forEach((b) => b.onclick = () => sheet('¿Borrar este viaje?', '<p class="muted small" style="margin:0">No se puede deshacer.</p>',
     [{ label: 'Borrar', primary: true, run: () => { db.trips = db.trips.filter((x) => x.id !== b.dataset.tdel); save(); renderTrips(); } }, { label: 'Cancelar' }]));
 }
 
+/* ---------- Detalle de un viaje: mapa coloreado + velocidad + consumo instantáneo ---------- */
+let tripView = null, tmap = null, tLayer = null;
+function instColor(kml, K) { // verde = rinde más que tu promedio; rojo = mucho menos
+  if (kml == null) return '#9AA6AE';
+  return kml >= K * 1.15 ? '#0B6E5A' : kml >= K * 0.85 ? '#5BA48F' : kml >= K * 0.55 ? '#E8A33D' : '#D6001C';
+}
+function renderTripDetail() {
+  const t = db.trips.find((x) => x.id === tripView);
+  const body = $('#trip-body');
+  if (!t || !t.track || t.track.length < 4) { body.innerHTML = '<div class="empty">Este viaje no tiene recorrido guardado.</div>'; return; }
+  const ser = trackSeries(t.track), ref = vspRef() || (ser.km / ser.liters), K = baseK(), scale = K / ref;
+  const est = estKml([t]), ppl = recentPpl(), d = new Date(t.start);
+  // km/l instantáneo de cada tramo (escalado a tu rendimiento real); detenido = sin dato
+  const pts = ser.pts.map((p) => ({ ...p, kml: p.v < 1 ? null : Math.min(40, (p.d / 1000) / (p.ml / 1000) * scale) }));
+  body.innerHTML = `
+    <div class="card col gap6">
+      <span class="b6">${d.getDate()} ${MONTHS[d.getMonth()]} · ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')} · ${fmt(t.km, 1)} km · ${Math.round((new Date(t.end) - d) / 60000)} min</span>
+      <span class="small">Consumo estimado <b>${est ? fmt(est, 1) + ' km/l' : '—'}</b>${est && ppl ? ' · ' + money(t.km / est * ppl) : ''} · puntaje ${score(aggregate([t])) ?? '—'}/100</span>
+    </div>
+    <div class="trip-map-wrap"><div id="trip-map"></div></div>
+    <div class="row gap10 xs muted" style="flex-wrap:wrap"><span><b style="color:#0B6E5A">━</b> rinde más que tu promedio</span><span><b style="color:#5BA48F">━</b> normal</span><span><b style="color:#E8A33D">━</b> gasta más</span><span><b style="color:#D6001C">━</b> gasta mucho (aceleración)</span><span><b style="color:#9AA6AE">━</b> detenido</span></div>
+    <div class="card col gap6"><span class="b6">Velocidad (km/h)</span>${seriesChart(pts, (p) => p.v * 3.6, null, '#14212B')}</div>
+    <div class="card col gap6"><span class="b6">Consumo instantáneo (km/l)</span>${seriesChart(pts, (p) => p.kml, K, null, K)}
+      <span class="muted xs">La línea punteada es tu promedio (${fmt(K, 1)} km/l). Las caídas fuertes son aceleraciones; los huecos, momentos detenido (gasta en ralentí sin avanzar).</span></div>`;
+  // Mapa
+  setTimeout(() => {
+    if (typeof L === 'undefined') return;
+    if (tmap) { tmap.remove(); tmap = null; }
+    tmap = L.map('trip-map', { zoomControl: false, attributionControl: false });
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(tmap);
+    pts.forEach((p) => L.polyline([[p.la0, p.lo0], [p.la1, p.lo1]], { color: instColor(p.kml, K), weight: 6, opacity: .9, interactive: false }).addTo(tmap));
+    const tr = t.track, a = tr[0], z = tr[tr.length - 1];
+    L.circleMarker([a[1], a[2]], { radius: 7, color: '#fff', weight: 3, fillColor: '#0B6E5A', fillOpacity: 1 }).addTo(tmap).bindTooltip('Inicio');
+    L.circleMarker([z[1], z[2]], { radius: 7, color: '#fff', weight: 3, fillColor: '#14212B', fillOpacity: 1 }).addTo(tmap).bindTooltip('Fin');
+    tmap.fitBounds(tr.map((q) => [q[1], q[2]]), { padding: [24, 24] });
+  }, 450);
+}
+// Gráfico de línea a lo largo del tiempo (minutos). colorBy: si se da K, colorea cada tramo como el mapa
+function seriesChart(pts, val, avg, color, K) {
+  const W = 326, H = 120, L0 = 26, B = 18, T = 8;
+  const step = Math.max(1, Math.ceil(pts.length / 300)), sp = pts.filter((_, i) => i % step === 0);
+  const vals = sp.map(val).filter((x) => x != null);
+  if (!vals.length) return '<span class="muted xs">Sin datos.</span>';
+  const hi = Math.max(avg || 0, ...vals) * 1.08, tEnd = sp[sp.length - 1].t || 1;
+  const x = (t) => L0 + t / tEnd * (W - L0 - 4), y = (v) => T + (1 - v / hi) * (H - T - B);
+  let segs = '';
+  for (let i = 1; i < sp.length; i++) {
+    const a = val(sp[i - 1]), b = val(sp[i]);
+    if (a == null || b == null) continue;
+    segs += `<line x1="${x(sp[i - 1].t).toFixed(1)}" y1="${y(a).toFixed(1)}" x2="${x(sp[i].t).toFixed(1)}" y2="${y(b).toFixed(1)}" stroke="${color || instColor(b, K)}" stroke-width="2.2" stroke-linecap="round"/>`;
+  }
+  const ticks = [0, hi / 2, hi].map((v) => `<line x1="${L0}" x2="${W}" y1="${y(v)}" y2="${y(v)}" stroke="#EEF2EF"/><text x="${L0 - 4}" y="${y(v) + 3}" font-size="9" fill="#5A6772" text-anchor="end">${Math.round(v)}</text>`).join('');
+  const mins = Math.round(tEnd / 60);
+  return `<svg class="tchart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Gráfico a lo largo del viaje">${ticks}
+    ${avg ? `<line x1="${L0}" x2="${W}" y1="${y(avg)}" y2="${y(avg)}" stroke="#E8A33D" stroke-width="1.5" stroke-dasharray="4 4"/>` : ''}
+    ${segs}<text x="${L0}" y="${H - 4}" font-size="9" fill="#5A6772">0 min</text><text x="${W}" y="${H - 4}" font-size="9" fill="#5A6772" text-anchor="end">${mins} min</text></svg>`;
+}
+
 /* ---------- Enganches con el resto de la app ---------- */
 (function hook() {
   const rc = RENDER.car, rh = RENDER.history;
+  RENDER.trip = () => renderTripDetail();
   RENDER.car = () => { rc(); renderTripSettings(); };
   RENDER.history = () => { rh(); $('#trips-link').classList.toggle('hidden', !(cfg().on || db.trips.length)); };
   if (!db.trips) db.trips = [];

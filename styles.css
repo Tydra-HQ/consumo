@@ -254,3 +254,11 @@ select.field{appearance:auto}
 #recent{gap:8px}
 #recent .load{padding:10px 14px}
 #recent .brand{width:36px;height:36px}
+
+/* Detalle de viaje */
+.trip-map-wrap{height:260px;border-radius:20px;overflow:hidden;background:#E4ECE6;flex-shrink:0}
+#trip-map{width:100%;height:100%}
+.tchart{width:100%;height:auto;display:block}
+.tchart text{stroke:none;font-family:'Inter',system-ui,sans-serif}
+/* Los mapas dibujan rutas y círculos con SVG: no aplicarles el tamaño de 22 px de los íconos */
+.leaflet-container svg{width:auto;height:auto}

@@ -167,8 +167,8 @@ function odoBounds(day) {
 }
 
 /* ---------------- Navegación ---------------- */
-const SCREENS = { home: 's-home', step1: 's-step1', step2: 's-step2', step3: 's-step3', done: 's-done', history: 's-history', car: 's-car', trips: 's-trips' };
-const ORDER = ['home', 'step1', 'step2', 'step3', 'done', 'history', 'trips', 'car'];
+const SCREENS = { home: 's-home', step1: 's-step1', step2: 's-step2', step3: 's-step3', done: 's-done', history: 's-history', car: 's-car', trips: 's-trips', trip: 's-trip' };
+const ORDER = ['home', 'step1', 'step2', 'step3', 'done', 'history', 'trips', 'trip', 'car'];
 let current = null;
 function go(name) {
   const back = current && ORDER.indexOf(name) < ORDER.indexOf(current);
@@ -933,7 +933,7 @@ $('#file-import').onchange = async (e) => {
 };
 
 /* ---------------- Botón "atrás" de Android ---------------- */
-const BACK = { step1: 'home', step2: 'step1', step3: 'step2', done: 'home', history: 'home', car: 'home', trips: 'home' };
+const BACK = { step1: 'home', step2: 'step1', step3: 'step2', done: 'home', history: 'home', car: 'home', trips: 'home', trip: 'trips' };
 history.replaceState({ root: true }, '');
 history.pushState({ app: true }, '');
 window.addEventListener('popstate', () => {
