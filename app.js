@@ -262,7 +262,9 @@ function renderStep1() {
   startLive();
 }
 /* GPS en vivo: mientras estás en el Paso 1, el mapa y la lista se actualizan a medida que te movés */
-let watchId = null, lastLive = 0, userPanned = false, lastFix = null, speedNow = 0;
+let watchId = null, lastLive = 0, userPanned = false, lastFix = null, speedNow = 0, wasMoving = false;
+// Zoom según la velocidad, como un navegador: más rápido = más alejado, despacio = más cerca
+const zoomForSpeed = (v) => (v > 22 ? 14 : v > 11 ? 15 : v > 4 ? 16 : 17); // m/s: >80, >40, >15 km/h
 function startLive() {
   stopLive();
   userPanned = false;
@@ -270,14 +272,14 @@ function startLive() {
     (err) => { if (!draft.pos) gpsFailed(err.code === 1 ? 'Sin permiso para usar el GPS. Podés buscar la estación a mano.' : 'No pudimos ubicarte. Buscá la estación a mano.'); },
     { enableHighAccuracy: true, timeout: 20000, maximumAge: 3000 });
 }
-function stopLive() { if (watchId != null) { navigator.geolocation.clearWatch(watchId); watchId = null; } lastFix = null; speedNow = 0; $('#drive-warn').classList.add('hidden'); }
+function stopLive() { if (watchId != null) { navigator.geolocation.clearWatch(watchId); watchId = null; } lastFix = null; speedNow = 0; wasMoving = false; $('#drive-warn').classList.add('hidden'); }
 function onLivePos(p) {
   const np = { lat: p.coords.latitude, lon: p.coords.longitude, acc: p.coords.accuracy };
   // Velocidad: la del GPS, o calculada entre dos lecturas. Más de ~12 km/h = vas manejando
   let speed = p.coords.speed;
   if ((speed == null || isNaN(speed)) && lastFix) { const dt = (p.timestamp - lastFix.t) / 1000; if (dt > 0) speed = distM(lastFix, np) / dt; }
   lastFix = { lat: np.lat, lon: np.lon, t: p.timestamp };
-  if (speed != null && !isNaN(speed)) { speedNow = speed; $('#drive-warn').classList.toggle('hidden', speed < 3.3); }
+  if (speed != null && !isNaN(speed)) { speedNow = speed; if (speed > 1.5) wasMoving = true; $('#drive-warn').classList.toggle('hidden', speed < 3.3); }
   if (!draft.pos) { draft.pos = np; lastLive = Date.now(); showNear(); return; }
   const moved = distM(draft.pos, np);
   if (moved < 8 && Date.now() - lastLive < 10000) return; // sin cambios relevantes
@@ -302,7 +304,13 @@ function liveUpdate() {
   }
   if (!lmap) return;
   drawMe();
-  if (!userPanned) lmap.panTo([pos.lat, pos.lon], { animate: true });
+  if (!userPanned) {
+    if (wasMoving) {
+      const z = zoomForSpeed(speedNow);
+      if (z !== lmap.getZoom()) lmap.setView([pos.lat, pos.lon], z, { animate: true });
+      else lmap.panTo([pos.lat, pos.lon], { animate: true });
+    } else lmap.panTo([pos.lat, pos.lon], { animate: true });
+  }
   else updateVisible();
   $('#gps-msg').innerHTML = '<span class="live-dot"></span>Siguiendo tu ubicación en vivo. Tocá tu estación o esperá a llegar.';
 }

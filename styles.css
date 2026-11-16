@@ -205,5 +205,5 @@ svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-l
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
 .recenter{width:40px;height:40px;border-radius:12px;background:#fff;color:var(--green);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,.25);cursor:pointer;border:none}
 .recenter.hidden{display:none}
-.drive-warn{display:flex;gap:10px;align-items:flex-start;background:#FCEBCF;color:#5C3A04;border-radius:14px;padding:12px 14px;font-size:13px;line-height:1.35;animation:rise .3s ease both}
-.drive-warn svg{width:22px;height:22px;stroke:#B26A00;flex-shrink:0;margin-top:1px}
+.drive-warn{display:inline-flex;align-self:flex-start;gap:6px;align-items:center;background:#FCEBCF;color:#5C3A04;border-radius:999px;padding:4px 10px;font-size:12px;font-weight:600;animation:rise .3s ease both}
+.drive-warn svg{width:15px;height:15px;stroke:#8A5300}
