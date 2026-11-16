@@ -1,9 +1,9 @@
 // Service worker: keeps the app working offline.
 // Bump VERSION on every release so phones pick up the new files.
-const VERSION = 'v13-2026-11-16';
-const V = '?v=13'; // igual que en index.html: cada versión usa nombres nuevos y el teléfono no reutiliza archivos viejos
+const VERSION = 'v14-2026-11-16';
+const V = '?v=14'; // igual que en index.html: cada versión usa nombres nuevos y el teléfono no reutiliza archivos viejos
 const FILES = ['./', 'index.html', 'styles.css' + V, 'app.js' + V, 'stations.json', 'manifest.webmanifest',
-  'icon-192.png', 'icon-512.png', 'leaflet.js' + V, 'leaflet.css' + V, 'supabase.js' + V, 'cloud.js' + V];
+  'icon-192.png', 'icon-512.png', 'leaflet.js' + V, 'leaflet.css' + V, 'supabase.js' + V, 'cloud.js' + V, 'trips.js' + V];
 
 self.addEventListener('install', (e) => {
   // Each file is cached on its own: one missing file must not break the whole install

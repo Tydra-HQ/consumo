@@ -15,7 +15,9 @@ const blank = () => ({
   suggestions: [],      // cola de sugerencias para enviar a la base compartida
   // Nube (fase 2)
   carId: null, dirty: [], tombstones: [], lastPull: null, carDirty: false, shareStats: true,
-  overrides: [], nickname: ''
+  overrides: [], nickname: '',
+  // Modo viaje (fase 3): apagado por defecto
+  trips: [], tripCfg: { on: false, mode: 'manual', sensor: true }
 });
 // Marca una carga como cambiada para subirla a la nube en la próxima sincronización
 function markDirty(id) { if (!db.dirty.includes(id)) db.dirty.push(id); }
@@ -165,8 +167,8 @@ function odoBounds(day) {
 }
 
 /* ---------------- Navegación ---------------- */
-const SCREENS = { home: 's-home', step1: 's-step1', step2: 's-step2', step3: 's-step3', done: 's-done', history: 's-history', car: 's-car' };
-const ORDER = ['home', 'step1', 'step2', 'step3', 'done', 'history', 'car'];
+const SCREENS = { home: 's-home', step1: 's-step1', step2: 's-step2', step3: 's-step3', done: 's-done', history: 's-history', car: 's-car', trips: 's-trips' };
+const ORDER = ['home', 'step1', 'step2', 'step3', 'done', 'history', 'trips', 'car'];
 let current = null;
 function go(name) {
   const back = current && ORDER.indexOf(name) < ORDER.indexOf(current);
@@ -246,6 +248,7 @@ function renderHome() {
   const recent = db.loads.slice().sort((a, b) => b.odo - a.odo).slice(0, 3);
   $('#recent').innerHTML = recent.length ? recent.map((l) => loadRow(l, segBy[l.id], l.id === inUse)).join('')
     : '<div class="empty">Todavía no registraste cargas.</div>';
+  if (typeof renderTripChip === 'function') renderTripChip();
 }
 // Carga llena más reciente: su combustible todavía se está usando, el consumo se conoce en la próxima carga llena
 function currentTankId() {
@@ -694,6 +697,7 @@ function renderDone() {
         <div class="row baseline gap8"><span class="done-big">${fmt(seg.kml, 1)}</span><span style="font-size:22px;font-weight:600">km/l</span></div>
         <span class="lite small">equivale a ${fmt(100 / seg.kml, 1)} l cada 100 km</span>
         <span class="small center-text" style="margin-top:8px;background:rgba(255,255,255,.12);border-radius:12px;padding:8px 12px">⛽ Combustible ${esc(seg.fromFuel)} cargado en <b>${esc(seg.fromName)}</b> el ${shortDate(seg.fromDate)}</span>
+        ${typeof tankDrivingLine === 'function' ? tankDrivingLine(seg) : ''}
       </div>
       <div class="grid3 rise d3" style="width:100%">
         <div class="tile"><b>${fmt(seg.km)}</b><span>km recorridos</span></div>
@@ -917,7 +921,7 @@ $('#file-import').onchange = async (e) => {
 };
 
 /* ---------------- Botón "atrás" de Android ---------------- */
-const BACK = { step1: 'home', step2: 'step1', step3: 'step2', done: 'home', history: 'home', car: 'home' };
+const BACK = { step1: 'home', step2: 'step1', step3: 'step2', done: 'home', history: 'home', car: 'home', trips: 'home' };
 history.replaceState({ root: true }, '');
 history.pushState({ app: true }, '');
 window.addEventListener('popstate', () => {
@@ -927,7 +931,7 @@ window.addEventListener('popstate', () => {
 });
 
 /* ---------------- Arranque ---------------- */
-const RENDER = { home: renderHome, step1: renderStep1, step2: renderStep2, step3: renderStep3, done: renderDone, history: renderHistory, car: renderCar };
+const RENDER = { home: renderHome, step1: renderStep1, step2: renderStep2, step3: renderStep3, done: renderDone, history: renderHistory, car: renderCar, trips: () => renderTrips() };
 loadStations().then(() => { if (current === 'car') renderCar(); });
 go('home');
 

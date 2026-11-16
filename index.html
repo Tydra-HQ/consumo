@@ -10,8 +10,8 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="leaflet.css?v=13">
-<link rel="stylesheet" href="styles.css?v=13">
+<link rel="stylesheet" href="leaflet.css?v=14">
+<link rel="stylesheet" href="styles.css?v=14">
 </head>
 <body>
 <main id="app">
@@ -41,6 +41,7 @@
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v16"/><path d="M3 21h13"/><path d="M6 8h7"/><path d="M15 9h2a2 2 0 0 1 2 2v6a1.5 1.5 0 0 0 3 0V8l-3-3"/></svg>
       Registrar carga
     </button>
+    <div id="trip-chip"></div>
 
     <div class="col gap10 rise d4">
       <div class="row between baseline">
@@ -202,6 +203,10 @@
       <span class="b6">Gasto por mes</span>
       <div id="chart-bars"></div>
     </div>
+    <button class="card row center gap14 tap rise d2 hidden" data-go="trips" id="trips-link">
+      <span class="ico-box"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l5-5 4 3 8-8"/><path d="M15 7h5v5"/></svg></span>
+      <span class="col gap2 grow left"><span class="b6">Mis viajes y forma de manejar</span><span class="muted xs">Ruta, ciudad, arranques y frenadas por tanque.</span></span>
+    </button>
     <div class="card col gap4 rise d3">
       <span class="b6 mb4">Por estación</span>
       <div id="by-station"></div>
@@ -212,6 +217,14 @@
     </div>
   </div>
   <nav class="tabbar" aria-label="Navegación"></nav>
+</section>
+
+<!-- ============ MIS VIAJES ============ -->
+<section class="screen" id="s-trips">
+  <div class="pad col gap14 grow scroll">
+    <div class="row center gap12 rise"><button class="back" data-go="home" aria-label="Volver al inicio"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button><h1 class="h1">Mis viajes</h1></div>
+    <div class="col gap14" id="trips-body"></div>
+  </div>
 </section>
 
 <!-- ============ MI AUTO ============ -->
@@ -232,6 +245,8 @@
     </form>
 
     <div class="card col gap8 rise d2" id="car-stats"></div>
+
+    <div class="card col gap10 rise d2" id="trip-settings"></div>
 
     <div class="row between center rise d2 mt6">
       <h2 class="h2">Compartir</h2>
@@ -269,9 +284,10 @@
 </div>
 <div class="toast hidden" id="toast" role="status"></div>
 </main>
-<script src="leaflet.js?v=13"></script>
-<script src="app.js?v=13"></script>
-<script src="supabase.js?v=13"></script>
-<script src="cloud.js?v=13"></script>
+<script src="leaflet.js?v=14"></script>
+<script src="app.js?v=14"></script>
+<script src="supabase.js?v=14"></script>
+<script src="cloud.js?v=14"></script>
+<script src="trips.js?v=14"></script>
 </body>
 </html>
