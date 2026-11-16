@@ -1,8 +1,9 @@
 // Service worker: keeps the app working offline.
 // Bump VERSION on every release so phones pick up the new files.
-const VERSION = 'v12-2026-11-16';
-const FILES = ['./', 'index.html', 'styles.css', 'app.js', 'stations.json', 'manifest.webmanifest',
-  'icon-192.png', 'icon-512.png', 'leaflet.js', 'leaflet.css', 'supabase.js', 'cloud.js'];
+const VERSION = 'v13-2026-11-16';
+const V = '?v=13'; // igual que en index.html: cada versión usa nombres nuevos y el teléfono no reutiliza archivos viejos
+const FILES = ['./', 'index.html', 'styles.css' + V, 'app.js' + V, 'stations.json', 'manifest.webmanifest',
+  'icon-192.png', 'icon-512.png', 'leaflet.js' + V, 'leaflet.css' + V, 'supabase.js' + V, 'cloud.js' + V];
 
 self.addEventListener('install', (e) => {
   // Each file is cached on its own: one missing file must not break the whole install
@@ -27,7 +28,7 @@ self.addEventListener('fetch', (e) => {
   const cacheable = url.origin === self.location.origin || url.host.endsWith('fonts.googleapis.com') || url.host.endsWith('fonts.gstatic.com');
   if (!cacheable) return;
   e.respondWith(
-    fetch(e.request)
+    fetch(e.request, { cache: 'no-cache' }) // siempre pregunta al servidor si hay versión nueva
       .then((res) => {
         const copy = res.clone();
         caches.open(VERSION).then((c) => c.put(e.request, copy));
