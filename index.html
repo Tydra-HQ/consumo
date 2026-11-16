@@ -10,18 +10,18 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="leaflet.css?v=14">
-<link rel="stylesheet" href="styles.css?v=14">
+<link rel="stylesheet" href="leaflet.css?v=15">
+<link rel="stylesheet" href="styles.css?v=15">
 </head>
 <body>
 <main id="app">
 
 <!-- ============ INICIO ============ -->
 <section class="screen" id="s-home" data-nav="home">
-  <div class="pad col gap18 grow scroll">
+  <div class="pad col gap12 grow scroll home-pad">
     <div class="row between center rise">
-      <div class="col gap2">
-        <span class="muted small">¡Hola!</span>
+      <div class="col" style="min-width:0">
+        <span class="muted small ellipsis" id="hello">¡Hola!</span>
         <h1 class="h1">Mi consumo</h1>
       </div>
       <button class="chip" data-go="car" id="car-chip">
@@ -33,7 +33,7 @@
     <div class="hero rise d1" id="hero"></div>
 
     <div class="grid2 rise d2">
-      <div class="card stat"><span class="muted xs">Costo por km (precios actuales)</span><span class="num24" id="st-cpk">—</span></div>
+      <div class="card stat"><span class="muted xs">Costo por km hoy</span><span class="num24" id="st-cpk">—</span></div>
       <div class="card stat"><span class="muted xs">Gastado este mes</span><span class="num24" id="st-month">—</span></div>
     </div>
 
@@ -220,11 +220,12 @@
 </section>
 
 <!-- ============ MIS VIAJES ============ -->
-<section class="screen" id="s-trips">
+<section class="screen" id="s-trips" data-nav="trips">
   <div class="pad col gap14 grow scroll">
     <div class="row center gap12 rise"><button class="back" data-go="home" aria-label="Volver al inicio"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button><h1 class="h1">Mis viajes</h1></div>
     <div class="col gap14" id="trips-body"></div>
   </div>
+  <nav class="tabbar" aria-label="Navegación"></nav>
 </section>
 
 <!-- ============ MI AUTO ============ -->
@@ -284,10 +285,10 @@
 </div>
 <div class="toast hidden" id="toast" role="status"></div>
 </main>
-<script src="leaflet.js?v=14"></script>
-<script src="app.js?v=14"></script>
-<script src="supabase.js?v=14"></script>
-<script src="cloud.js?v=14"></script>
-<script src="trips.js?v=14"></script>
+<script src="leaflet.js?v=15"></script>
+<script src="app.js?v=15"></script>
+<script src="supabase.js?v=15"></script>
+<script src="cloud.js?v=15"></script>
+<script src="trips.js?v=15"></script>
 </body>
 </html>

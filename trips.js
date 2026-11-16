@@ -37,7 +37,7 @@ function renderTripSettings() {
       </div>
       <label class="row center gap10 xs muted" style="cursor:pointer"><input type="checkbox" id="tg-sensor" ${c.sensor ? 'checked' : ''} style="width:20px;height:20px;accent-color:#0B6E5A"> Usar el sensor de movimiento (más preciso para arranques y frenadas; teléfono fijo en un soporte)</label>
       <span class="muted xs">El recorrido detallado queda solo en este teléfono. Mientras registra, la pantalla se mantiene encendida: conviene tener el teléfono cargando.</span>` : ''}`;
-  $('#tg-trips').onclick = () => { c.on = !c.on; if (!c.on) stopTripEngine(true); save(); renderTripSettings(); applyTripMode(); };
+  $('#tg-trips').onclick = () => { c.on = !c.on; if (!c.on) stopTripEngine(true); save(); renderTripSettings(); applyTripMode(); renderTabbars(); };
   box.querySelectorAll('[data-mode]').forEach((b) => b.onclick = () => { if (b.disabled) return; c.mode = b.dataset.mode; save(); renderTripSettings(); applyTripMode(); });
   const sen = $('#tg-sensor'); if (sen) sen.onchange = () => { c.sensor = sen.checked; save(); if (trip) setMotion(c.sensor); };
 }
@@ -182,13 +182,14 @@ function score(s) {
   if (s.km < 1) return null;
   const per100 = (x) => x / s.km * 100;
   const idlePct = s.idleSec / Math.max(1, s.idleSec + s.movingSec) * 100;
-  let p = 100 - per100(s.hardStarts + s.hardAccel) * 2 - per100(s.hardBrakes) * 3 - per100(s.abrupt) * 1 - Math.max(0, idlePct - 10) * 0.6 - (s.over120Km / s.km * 100) * 0.5;
+  let p = 100 - Math.min(35, per100(s.hardStarts + s.hardAccel) * 1) - Math.min(30, per100(s.hardBrakes) * 1.5) - Math.min(10, per100(s.abrupt) * 0.3)
+    - Math.min(15, Math.max(0, idlePct - 10) * 0.5) - Math.min(10, (s.over120Km / s.km * 100) * 0.3);
   return Math.max(0, Math.min(100, Math.round(p)));
 }
 function tips(s) {
   const out = [], per100 = (x) => x / s.km * 100;
-  if (per100(s.hardStarts + s.hardAccel) > 3) out.push('Arrancá más suave: muchas aceleraciones fuertes.');
-  if (per100(s.hardBrakes) > 2) out.push('Anticipá las frenadas: dejá rodar el auto antes de frenar.');
+  if (per100(s.hardStarts + s.hardAccel) > 10) out.push('Arrancá más suave: muchas aceleraciones fuertes.');
+  if (per100(s.hardBrakes) > 8) out.push('Anticipá las frenadas: dejá rodar el auto antes de frenar.');
   const idle = s.idleSec / Math.max(1, s.idleSec + s.movingSec);
   if (idle > 0.2) out.push('Mucho tiempo detenido con el motor en marcha: el ralentí gasta sin avanzar.');
   if (s.over120Km / s.km > 0.1) out.push('Por encima de 120 km/h el consumo sube mucho.');
@@ -216,7 +217,7 @@ function tankDrivingLine(seg) {
 /* ---------- Consumo estimado por viaje ----------
    Modelo: tu rendimiento promedio (K) ajustado por tipo de vía, ralentí y estilo.
    Ciudad rinde ~20 % menos que K, ruta ~12 % más; >120 km/h ~10 % menos; ralentí ≈ 0,8 l/h;
-   cada arranque fuerte / frenada brusca cada 100 km suma ~1,5 % (tope 15 %).
+   cada arranque fuerte / frenada brusca cada 100 km suma ~0,5 % (tope 10 %).
    Al cerrar cada tanque se compara con el real y se calibra (promedio de los últimos 5 tanques). */
 const baseK = () => summary(segments()).kml || 10;
 function rawLiters(t) {
@@ -224,7 +225,7 @@ function rawLiters(t) {
   const hwyNormal = Math.max(0, t.hwyKm - (t.over120Km || 0));
   let l = t.cityKm / (K * 0.8) + t.aveKm / K + hwyNormal / (K * 1.12) + (t.over120Km || 0) / (K * 0.9) + t.idleSec / 3600 * 0.8;
   const ev = t.km ? (t.hardStarts + t.hardAccel + t.hardBrakes) / t.km * 100 : 0;
-  return l * (1 + Math.min(0.15, ev * 0.015));
+  return l * (1 + Math.min(0.10, ev * 0.005));
 }
 function calibration() {
   const ratios = [];

@@ -237,3 +237,20 @@ select.field{appearance:auto}
 .trip-start svg{width:18px;height:18px;fill:currentColor}
 .trip-off{opacity:.55}
 .opt[disabled]{cursor:not-allowed}
+
+/* v15: Inicio más compacto (entran 3 cargas) y botones que no se achican */
+.scroll>*{flex-shrink:0}
+.home-pad{padding-top:20px}
+#s-home .h1{font-size:24px}
+.hero{padding:14px 18px 12px;gap:4px;border-radius:22px}
+.hero .big{font-size:44px}
+.hero .unit{font-size:16px}
+.hero svg{height:44px}
+.hero .lbl{font-size:12px}
+#s-home .stat{padding:10px 14px;gap:2px}
+#s-home .num24{font-size:21px}
+.cta{height:56px;font-size:19px;border-radius:18px}
+.trip-start{height:44px}
+#recent{gap:8px}
+#recent .load{padding:10px 14px}
+#recent .brand{width:36px;height:36px}

@@ -184,6 +184,7 @@ function go(name) {
   next.classList.remove('back-anim');
   if (current === 'step1' && name !== 'step1') stopLive();
   current = name;
+  renderTabbars();
   (RENDER[name] || (() => {}))();
   const sc = next.querySelector('.scroll'); if (sc) sc.scrollTop = 0;
 }
@@ -200,11 +201,19 @@ const TAB_ICONS = {
   history: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
   car: '<path d="M5 17h14v-5l-2-5H7l-2 5z"/><circle cx="8" cy="17" r="2"/><circle cx="16" cy="17" r="2"/>'
 };
-$$('.tabbar').forEach((nav) => {
-  const here = nav.closest('.screen').dataset.nav;
-  nav.innerHTML = [['home', 'Inicio'], ['history', 'Historial'], ['car', 'Mi auto']].map(([k, lab]) =>
-    `<button data-go="${k}" class="${k === here ? 'on' : ''}" ${k === here ? 'aria-current="page"' : ''}><svg viewBox="0 0 24 24" aria-hidden="true">${TAB_ICONS[k]}</svg>${lab}</button>`).join('');
-});
+TAB_ICONS.trips = '<path d="M3 17l5-5 4 3 8-8"/><path d="M15 7h5v5"/>';
+// Barra de abajo: la pestaña "Viajes" aparece solo si el modo viaje está activo o hay viajes guardados
+function renderTabbars() {
+  const showTrips = !!((db.tripCfg && db.tripCfg.on) || (db.trips && db.trips.length));
+  const tabs = [['home', 'Inicio'], ['history', 'Historial']].concat(showTrips ? [['trips', 'Viajes']] : []).concat([['car', 'Mi auto']]);
+  $$('.tabbar').forEach((nav) => {
+    const here = nav.closest('.screen').dataset.nav;
+    nav.style.gridTemplateColumns = `repeat(${tabs.length}, minmax(0, 1fr))`;
+    nav.innerHTML = tabs.map(([k, lab]) =>
+      `<button data-go="${k}" class="${k === here ? 'on' : ''}" ${k === here ? 'aria-current="page"' : ''}><svg viewBox="0 0 24 24" aria-hidden="true">${TAB_ICONS[k]}</svg>${lab}</button>`).join('');
+  });
+}
+renderTabbars();
 
 /* ---------------- Borrador de la carga en curso ---------------- */
 const todayStr = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
@@ -214,6 +223,7 @@ let draft = newDraft();
 /* ---------------- INICIO ---------------- */
 function renderHome() {
   const car = db.car;
+  $('#hello').textContent = typeof cloudUserName === 'function' && cloudUserName() ? '¡Hola, ' + cloudUserName() + '!' : '¡Hola!';
   $('#car-chip-name').textContent = car.model ? [car.model, car.year].filter(Boolean).join(' ') : 'Mi auto';
   const segs = segments();
   const all = summary(segs);
@@ -223,13 +233,15 @@ function renderHome() {
     const diff = all.kml ? last.kml - all.kml : 0;
     const pts = segs.slice(-8).map((s) => s.kml);
     hero.innerHTML = `
-      <span class="lbl">Último tanque medido</span>
-      <div class="row baseline gap8">
-        <span class="big">${fmt(last.kml, 1)}</span><span class="unit">km/l</span>
+      <div class="row between center gap8">
+        <span class="lbl">Último tanque medido</span>
         ${segs.length > 1 ? `<span class="delta">${Math.abs(diff) < 0.05 ? '= promedio' : (diff > 0 ? '▲ ' : '▼ ') + fmt(Math.abs(diff), 1) + ' vs. promedio'}</span>` : ''}
       </div>
-      ${pts.length > 1 ? spark(pts) : ''}
-      <span class="lbl">Combustible de ${esc(last.fromName)} (${shortDate(last.fromDate)})</span>`;
+      <div class="row center gap12">
+        <div class="row baseline gap6" style="flex-shrink:0"><span class="big">${fmt(last.kml, 1)}</span><span class="unit">km/l</span></div>
+        <div class="grow" style="min-width:0">${pts.length > 1 ? spark(pts) : ''}</div>
+      </div>
+      <span class="lbl ellipsis">Combustible de ${esc(last.fromName)} (${shortDate(last.fromDate)})</span>`;
   } else {
     hero.innerHTML = `
       <span class="lbl">Bienvenido</span>

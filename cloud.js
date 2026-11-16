@@ -9,6 +9,14 @@ const SB_KEY = 'sb_publishable_qssBOD1BSCTWRbPdwOCwhA_fXss0mrJ';
 let sb = null, user = null, syncing = false, syncAgain = false, isAdmin = false;
 let cloudStatus = '', myCars = [], pendingEmail = '';
 
+// Nombre para el saludo de Inicio: el apodo, o la primera parte del correo ("leonardo.dente@…" → "Leonardo")
+function cloudUserName() {
+  if (!user) return null;
+  if (db.nickname) return db.nickname;
+  const p = (user.email || '').split('@')[0].split(/[._-]/)[0];
+  return p ? p.charAt(0).toUpperCase() + p.slice(1) : null;
+}
+
 function initCloud() {
   if (!window.supabase || !window.supabase.createClient) return;
   sb = window.supabase.createClient(SB_URL, SB_KEY, {
@@ -21,6 +29,7 @@ function initCloud() {
     if (user && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) setTimeout(cloudSync, 50);
     if (!user) { isAdmin = false; myCars = []; }
     renderCloud();
+    if (current === 'home') renderHome();
   });
   fetchOverrides();
   window.addEventListener('online', () => { fetchOverrides(); cloudSync(); });
@@ -128,12 +137,16 @@ async function cloudSync() {
       const { error } = await sb.from('station_suggestions').insert(row);
       if (!error) sg.sent = true;
     }
-    // 6) ¿Sos administrador? (para aprobar sugerencias)
+    // 6) Apodo guardado en la nube (por si se puso desde otro teléfono)
+    const { data: prof } = await sb.from('profiles').select('nickname').eq('id', user.id).maybeSingle();
+    if (prof) db.nickname = prof.nickname || '';
+    // 7) ¿Sos administrador? (para aprobar sugerencias)
     const { data: adm } = await sb.rpc('is_admin');
     isAdmin = !!adm;
     save();
     setStatus('Sincronizado ✓ ' + new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }));
     if (current === 'car') renderCloud(); // refrescar código, autos y ranking
+    if (current === 'home') renderHome();
     if (rows && rows.length && typeof RENDER !== 'undefined' && RENDER[current] && !['step1', 'step2', 'step3', 'car'].includes(current)) RENDER[current]();
   } catch (e) {
     setStatus('No se pudo sincronizar: ' + (e.message || e));
