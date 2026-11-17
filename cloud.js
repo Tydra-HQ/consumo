@@ -58,8 +58,10 @@ async function ensureCar() {
   const { data: cars, error } = await sb.from('cars').select('*').order('created_at');
   if (error) throw error;
   myCars = cars || [];
-  if (db.carId && myCars.some((c) => c.id === db.carId)) return;
-  if (myCars.length) {
+  if (db.carId && myCars.some((c) => c.id === db.carId)) { addCloudCars(); return; }
+  // ¿Algún auto de este teléfono ya está en la nube de esta cuenta? Entonces este es un auto nuevo: se crea aparte
+  const linked = (db.garage || []).some((g) => g.carId && myCars.some((c) => c.id === g.carId));
+  if (myCars.length && !linked) {
     // Ya tenés un auto en la nube (otro teléfono): usamos ese y subimos lo que haya en este
     adoptCar(myCars.find((c) => c.owner === user.id) || myCars[0], false);
   } else {
@@ -69,12 +71,25 @@ async function ensureCar() {
       tank: parseFloat(c.tank) || null, share_stats: db.shareStats !== false
     }).select().single();
     if (e2) throw e2;
-    myCars = [data];
+    myCars = myCars.concat([data]);
     db.carId = data.id; db.carDirty = false;
   }
+  addCloudCars();
   db.dirty = Array.from(new Set(db.dirty.concat(db.loads.map((l) => l.id)))); // primera vez: subir todo
   db.lastPull = null;
   save();
+}
+// Autos de la cuenta que todavía no están en este teléfono (otro teléfono, auto compartido): se agregan a "Mis autos"
+function addCloudCars() {
+  if (typeof emptyCarEntry !== 'function') return;
+  const known = new Set([db.carId].concat((db.garage || []).map((g) => g.carId)).filter(Boolean));
+  for (const c of myCars) {
+    if (known.has(c.id)) continue;
+    const e = emptyCarEntry({ brand: c.brand || '', model: c.model || '', year: c.year ? String(c.year) : '', tank: c.tank ? String(c.tank) : '' },
+      { kind: c.owner === user.id ? 'own' : 'shared', country: db.lastCountry || 'AR' });
+    e.carId = c.id; e.carDirty = false; e.shareStats = c.share_stats !== false;
+    db.garage.push(e);
+  }
 }
 // Pasa a usar un auto de la nube. Si clear=true, reemplaza las cargas locales por las de ese auto
 function adoptCar(car, clear) {
@@ -198,9 +213,7 @@ function renderCloud() {
   }
 
   // Con sesión
-  const carOpts = myCars.length > 1 ? `
-    <label for="car-pick" class="muted xs b6">Auto activo</label>
-    <select id="car-pick" class="field">${myCars.map((c) => `<option value="${c.id}" ${c.id === db.carId ? 'selected' : ''}>${esc([c.brand, c.model, c.year].filter(Boolean).join(' ') || 'Auto sin nombre')}${c.owner === user.id ? '' : ' (compartido)'}</option>`).join('')}</select>` : '';
+  const carOpts = '';
   acct.innerHTML = `
     <div class="row center gap10"><span class="ico-box">${ICON.cloud}</span>
       <div class="col gap2" style="min-width:0"><span class="b6 ellipsis">${esc(user.email)}</span><span class="muted xs" id="sync-status">${esc(cloudStatus)}</span></div></div>
@@ -210,23 +223,22 @@ function renderCloud() {
     <div class="grid2"><button class="btn2" id="sync-go">Sincronizar</button><button class="btn2" id="out-go">Cerrar sesión</button></div>`;
   $('#sync-go').onclick = () => cloudSync();
   $('#out-go').onclick = () => sheet('¿Cerrar sesión?', '<p class="muted small" style="margin:0">Tus cargas siguen en este teléfono y en la nube.</p>',
-    [{ label: 'Cerrar sesión', primary: true, run: async () => { await sb.auth.signOut(); db.carId = null; db.lastPull = null; db.dirty = db.loads.map((l) => l.id); save(); renderCloud(); } }, { label: 'Cancelar' }]);
+    [{ label: 'Cerrar sesión', primary: true, run: async () => { await sb.auth.signOut(); db.lastPull = null; save(); renderCloud(); } }, { label: 'Cancelar' }]);
   $('#nick-go').onclick = async () => {
     const nickname = $('#nick').value.trim() || null;
     const { error } = await sb.from('profiles').upsert({ id: user.id, nickname });
     if (error) toast(error.code === '23505' ? 'Ese apodo ya está en uso.' : 'No se pudo guardar el apodo.');
     else { db.nickname = nickname || ''; save(); toast('Apodo guardado.'); }
   };
-  if ($('#car-pick')) $('#car-pick').onchange = (e) => switchCar(e.target.value);
 
   // Compartir el auto
   const car = myCars.find((c) => c.id === db.carId);
   const sc = $('#share-card'); sc.classList.remove('hidden');
   sc.innerHTML = `
-    <span class="b6">Auto compartido</span>
+    <span class="b6">Compartir ${esc(carName(db.car))}</span>
     <span class="muted xs">Para que otra persona (por ejemplo, de tu familia) registre cargas de este auto, pasale este código:</span>
     <div class="row center between"><span class="code">${car ? esc(car.invite_code) : '······'}</span><button class="btn2" id="code-share" style="padding:0 16px">Enviar código</button></div>
-    <label for="join" class="muted xs b6">¿Te pasaron un código? Sumate a ese auto:</label>
+    <label for="join" class="muted xs b6">¿Te pasaron un código? Se agrega a tus autos:</label>
     <div class="row gap8"><input id="join" class="field" maxlength="6" placeholder="ABC123" style="text-transform:uppercase"><button class="btn2" id="join-go" style="padding:0 16px">Sumarme</button></div>`;
   $('#code-share').onclick = async () => {
     if (!car) return;
@@ -235,13 +247,13 @@ function renderCloud() {
   };
   $('#join-go').onclick = () => {
     const code = $('#join').value.trim().toUpperCase(); if (code.length < 6) { toast('El código tiene 6 caracteres.'); return; }
-    sheet('¿Sumarte a ese auto?', '<p class="muted small" style="margin:0">Vas a ver y registrar las cargas de ese auto. Las tuyas quedan guardadas en tu propio auto y podés volver a él desde "Auto activo".</p>',
+    sheet('¿Sumarte a ese auto?', '<p class="muted small" style="margin:0">Se agrega a "Mis autos" y pasa a ser el auto en uso. Tus otros autos quedan como están; cambiás desde la lista.</p>',
       [{ label: 'Sumarme', primary: true, run: async () => {
           await cloudSync(); // primero guardar lo propio
           const { data: cid, error } = await sb.rpc('join_car', { code });
           if (error) { toast(error.message.includes('invalid') ? 'Código inexistente.' : 'No se pudo: ' + error.message); return; }
           await switchCar(cid);
-          toast('Listo: ahora estás en el auto compartido.');
+          toast('Listo: el auto compartido se agregó a tus autos.');
         } }, { label: 'Cancelar' }]);
   };
 
@@ -251,9 +263,15 @@ function renderCloud() {
 
 async function switchCar(carId) {
   await cloudSync(); // guardar cambios del auto actual
-  const { data: car, error } = await sb.from('cars').select('*').eq('id', carId).single();
-  if (error || !car) { toast('No se pudo abrir ese auto.'); return; }
-  adoptCar(car, true); save();
+  if (db.carId === carId) return;
+  if (!db.garage.some((g) => g.carId === carId)) {
+    const { data: car, error } = await sb.from('cars').select('*').eq('id', carId).single();
+    if (error || !car) { toast('No se pudo abrir ese auto.'); return; }
+    myCars = myCars.filter((c) => c.id !== car.id).concat([car]);
+    addCloudCars();
+  }
+  const g = db.garage.find((x) => x.carId === carId);
+  if (g) switchToCar(g.carMeta.key, true);
   await cloudSync();
   renderCar();
 }

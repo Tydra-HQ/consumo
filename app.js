@@ -7,15 +7,32 @@ const KEY = 'miconsumo.v1';
 const COUNTRIES = {
   AR: { name: 'Argentina', center: [-34.6037, -58.3816], file: 'stations.json', cur: 'ARS', fuels: ['Súper', 'Premium', 'Diésel', 'GNC'] },
   ES: { name: 'España', center: [40.4168, -3.7038], file: 'estaciones-ES.json', cur: 'EUR', fuels: ['Gasolina 95', 'Gasolina 98', 'Diésel', 'Diésel+', 'GLP'],
-        priceIdx: { 'Gasolina 95': 0, 'Gasolina 98': 1, 'Diésel': 2, 'Diésel+': 3, 'GLP': 4 } }
+        priceIdx: { 'Gasolina 95': 0, 'Gasolina 98': 1, 'Diésel': 2, 'Diésel+': 3, 'GLP': 4 } },
+  // Brasil: un archivo por estado (la app baja solo el de donde estás); todavía sin precios
+  BR: { name: 'Brasil', center: [-23.5505, -46.6333], file: 'estaciones-BR.json', regional: true, cur: 'BRL',
+        fuels: ['Gasolina', 'Gasolina aditivada', 'Etanol', 'Diesel S10', 'GNV'] }
 };
 let COUNTRY = 'AR';
 let FUELS = COUNTRIES.AR.fuels;
 // País según la posición GPS (cajas aproximadas; España incluye Baleares y Canarias)
+// Contorno aproximado de Argentina (para no confundirla con el sur de Brasil, Uruguay o Paraguay)
+const AR_POLY = [[-21.8, -66.2], [-22.0, -62.8], [-23.0, -61.0], [-24.0, -60.0], [-25.3, -57.65], [-27.3, -58.6], [-27.3, -56.0], [-26.9, -55.0],
+  [-25.55, -54.62], [-25.6, -54.1], [-25.95, -53.75], [-26.25, -53.64], [-27.1, -53.8],
+  [-28.0, -55.4], [-29.2, -56.7], [-30.2, -57.6], [-33.5, -58.4], [-34.6, -58.3], [-35.5, -57.0], [-41, -62.5], [-55.1, -66.4], [-55.0, -68.8],
+  [-52.4, -69.0], [-52.3, -72.0], [-49, -73.6], [-46, -71.8], [-41, -71.9], [-36, -70.6], [-33, -70.0], [-28, -69.0], [-24, -67.3], [-22.0, -66.7]];
+function inPoly(lat, lon, poly) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [ai, oi] = poly[i], [aj, oj] = poly[j];
+    if ((oi > lon) !== (oj > lon) && lat < (aj - ai) * (lon - oi) / (oj - oi) + ai) inside = !inside;
+  }
+  return inside;
+}
 function countryAt(lat, lon) {
-  if (lat < -20 && lat > -56 && lon > -74 && lon < -53) return 'AR';
+  if (inPoly(lat, lon, AR_POLY)) return 'AR';
   if ((lat > 35.8 && lat < 43.9 && lon > -9.5 && lon < 4.4) || (lat > 27.5 && lat < 29.5 && lon > -18.3 && lon < -13.3)
     || (lat > 35.1 && lat < 35.95 && lon > -5.5 && lon < -2.8)) return 'ES'; // + Ceuta y Melilla
+  if (lat > -33.8 && lat < 5.3 && lon > -74 && lon < -34.7 && !(lat < -30.2 && lon < -53.5)) return 'BR'; // (sin Uruguay)
   return null;
 }
 const BRANDS = ['YPF', 'Shell', 'Axion', 'Puma', 'Blanca', 'Dapsa', 'Gulf', 'Refinor', 'VOY', 'Otra'];
@@ -31,7 +48,9 @@ const blank = () => ({
   carId: null, dirty: [], tombstones: [], lastPull: null, carDirty: false, shareStats: true,
   overrides: [], nickname: '',
   // Modo viaje (fase 3): apagado por defecto
-  trips: [], tripCfg: { on: false, mode: 'manual', sensor: true }
+  trips: [], tripCfg: { on: false, mode: 'manual', sensor: true },
+  // Varios autos: el activo usa los campos de arriba; los demás quedan guardados en garage
+  carMeta: null, garage: []
 });
 // Marca una carga como cambiada para subirla a la nube en la próxima sincronización
 function markDirty(id) { if (!db.dirty.includes(id)) db.dirty.push(id); }
@@ -39,8 +58,11 @@ const cloudSoon = () => { if (typeof cloudSync === 'function') setTimeout(cloudS
 
 let db = load();
 function load() {
-  try { return Object.assign(blank(), JSON.parse(localStorage.getItem(KEY)) || {}); }
-  catch (e) { return blank(); }
+  let d;
+  try { d = Object.assign(blank(), JSON.parse(localStorage.getItem(KEY)) || {}); }
+  catch (e) { d = blank(); }
+  if (!d.carMeta) d.carMeta = { key: 'c-' + Date.now().toString(36), kind: 'own', country: d.lastCountry || 'AR', archived: false, lastUsed: Date.now(), seenIn: [] };
+  return d;
 }
 function save() {
   try { localStorage.setItem(KEY, JSON.stringify(db)); }
@@ -51,18 +73,47 @@ let STATIONS = [];        // base oficial + correcciones + estaciones propias
 let stationsVersion = '';
 let officialCount = 0;
 let pricesDate = '';
-async function loadStations(code) {
+let loadedRegions = [], regionIdx = null; // Brasil: estados cargados
+// Estados con estaciones en tu cuadrado de 1° y los de alrededor (el más cercano si no hay ninguno)
+function regionsFor(idx, p) {
+  const la = Math.floor(p.lat), lo = Math.floor(p.lon), out = [];
+  const add = (k) => (idx.cells[k] || []).forEach((u) => { if (!out.includes(u)) out.push(u); });
+  add(la + ',' + lo);
+  for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) add((la + a) + ',' + (lo + b));
+  if (!out.length) {
+    const near = Object.keys(idx.cells).map((k) => { const [a, b] = k.split(',').map(Number); return [k, Math.hypot(a + 0.5 - p.lat, b + 0.5 - p.lon)]; }).sort((x, y) => x[1] - y[1])[0];
+    if (near) add(near[0]);
+  }
+  return out.slice(0, 4);
+}
+async function loadStations(code, pos) {
   code = code || (db.country && db.country !== 'auto' ? db.country : (db.lastCountry || 'AR'));
   const C = COUNTRIES[code] || COUNTRIES.AR;
   COUNTRY = COUNTRIES[code] ? code : 'AR'; FUELS = C.fuels; db.lastCountry = COUNTRY;
   if (!FUELS.includes(db.lastFuel)) db.lastFuel = null;
   try {
-    const res = await fetch(C.file);
-    if (!res.ok) throw new Error(res.status);
-    const data = await res.json();
-    stationsVersion = data.version; pricesDate = data.pricesDate || '';
-    officialCount = data.rows.length;
-    STATIONS = data.rows.map((r) => ({ id: r[0], brand: r[1], address: r[2], city: r[3], province: r[4], lat: r[5], lon: r[6], prices: r[7] || null }));
+    let rows = [];
+    loadedRegions = [];
+    if (C.regional) {
+      // Índice de estados → bajamos solo los que rodean tu posición
+      const idx = await (await fetch(C.file)).json();
+      const p = pos || { lat: C.center[0], lon: C.center[1] };
+      const pick = regionsFor(idx, p);
+      for (const uf of pick) {
+        const d = await (await fetch(C.file.replace('.json', '-' + uf + '.json'))).json();
+        rows = rows.concat(d.rows); loadedRegions.push(uf);
+      }
+      regionIdx = idx;
+      stationsVersion = idx.version; pricesDate = '';
+    } else {
+      const res = await fetch(C.file);
+      if (!res.ok) throw new Error(res.status);
+      const data = await res.json();
+      stationsVersion = data.version; pricesDate = data.pricesDate || '';
+      rows = data.rows;
+    }
+    officialCount = rows.length;
+    STATIONS = rows.map((r) => ({ id: r[0], brand: r[1], address: r[2], city: r[3], province: r[4], lat: r[5], lon: r[6], prices: r[7] && r[7].length ? r[7] : null }));
   } catch (e) {
     STATIONS = []; stationsVersion = ''; officialCount = 0;
     toast(`No se pudo cargar la base de estaciones de ${C.name}.`);
@@ -71,12 +122,23 @@ async function loadStations(code) {
 }
 // Si el país está en "automático" y el GPS dice que estás en otro, cambia de base
 async function ensureCountryFor(pos) {
-  if (db.country && db.country !== 'auto') return false;
-  const c = countryAt(pos.lat, pos.lon);
-  if (!c || c === COUNTRY) return false;
-  toast(`Estás en ${COUNTRIES[c].name}: cargando sus estaciones…`);
-  await loadStations(c); save();
-  return true;
+  if (!db.country || db.country === 'auto') {
+    const c = countryAt(pos.lat, pos.lon);
+    if (c && c !== COUNTRY) {
+      toast(`Estás en ${COUNTRIES[c].name}: cargando sus estaciones…`);
+      await loadStations(c, pos); save();
+      if (typeof askCarFor === 'function') askCarFor(c, false);
+      return true;
+    }
+  }
+  // Brasil: si te moviste a otro estado, bajamos el de ahí
+  if (COUNTRIES[COUNTRY].regional && regionIdx && regionsFor(regionIdx, pos).slice(0, 2).some((u) => !loadedRegions.includes(u))) {
+    if (ensureCountryFor.busy) return false;
+    ensureCountryFor.busy = true;
+    try { await loadStations(COUNTRY, pos); } finally { ensureCountryFor.busy = false; }
+    return true;
+  }
+  return false;
 }
 function mergeUserLayer() {
   STATIONS = STATIONS.filter((s) => !s.mine && !s.ov);
@@ -105,7 +167,9 @@ const norm = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const fmt = (n, d = 0) => Number(n).toLocaleString('es-AR', { minimumFractionDigits: d, maximumFractionDigits: d });
 // Moneda: pesos sin decimales; euros con 2 (o 3 para precio por litro)
 const curOf = (cur) => cur || COUNTRIES[COUNTRY].cur;
-const money = (n, cur) => (curOf(cur) === 'EUR' ? fmt(n, n < 10 ? (n < 3 ? 3 : 2) : 2) + ' €' : '$ ' + fmt(Math.round(n)));
+const money = (n, cur) => (curOf(cur) === 'EUR' ? fmt(n, n < 10 ? (n < 3 ? 3 : 2) : 2) + ' €'
+  : curOf(cur) === 'BRL' ? 'R$ ' + fmt(n, n < 100 ? 2 : 0) : '$ ' + fmt(Math.round(n)));
+const CUR_SYM = { ARS: '$', EUR: '€', BRL: 'R$' };
 const sameCur = (l) => (l.cur || 'ARS') === COUNTRIES[COUNTRY].cur;
 const MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 const shortDate = (iso) => { const d = new Date(iso); return d.getDate() + ' ' + MONTHS[d.getMonth()]; };
@@ -151,8 +215,8 @@ $('#sheet-bg').addEventListener('click', (e) => { if (e.target.id === 'sheet-bg'
 
 /* ---------------- Cálculo de consumo (tanque lleno a tanque lleno) ---------------- */
 // Cada carga con tanque lleno cierra un tramo: km desde la carga llena anterior ÷ litros cargados desde entonces.
-function segments() {
-  const loads = db.loads.slice().sort((a, b) => a.odo - b.odo);
+function segments(list) {
+  const loads = (list || db.loads).slice().sort((a, b) => a.odo - b.odo);
   const out = [];
   let prevFull = null, liters = 0, cost = 0;
   for (const l of loads) {
@@ -239,7 +303,7 @@ TAB_ICONS.trips = '<path d="M3 17l5-5 4 3 8-8"/><path d="M15 7h5v5"/>';
 // Barra de abajo: la pestaña "Viajes" aparece solo si el modo viaje está activo o hay viajes guardados
 function renderTabbars() {
   const showTrips = !!((db.tripCfg && db.tripCfg.on) || (db.trips && db.trips.length));
-  const tabs = [['home', 'Inicio'], ['history', 'Historial']].concat(showTrips ? [['trips', 'Viajes']] : []).concat([['car', 'Mi auto']]);
+  const tabs = [['home', 'Inicio'], ['history', 'Historial']].concat(showTrips ? [['trips', 'Viajes']] : []).concat([['car', 'Mis autos']]);
   $$('.tabbar').forEach((nav) => {
     const here = nav.closest('.screen').dataset.nav;
     nav.style.gridTemplateColumns = `repeat(${tabs.length}, minmax(0, 1fr))`;
@@ -322,14 +386,18 @@ function spark(vals) {
 
 /* ---------------- PASO 1: ubicación ---------------- */
 let nearList = [];
-function renderStep1() {
+function updateCountryChip() {
   const cc = $('#country-chip');
   if (cc) { cc.textContent = 'País: ' + (db.country && db.country !== 'auto' ? COUNTRIES[db.country].name : 'automático (' + COUNTRIES[COUNTRY].name + ')') + ' ▾'; }
+}
+function renderStep1() {
+  updateCountryChip();
   hideHere();
   $('#search-box').classList.add('hidden');
   $('#search-input').value = '';
   $('#search-list').innerHTML = '';
   updateNext1();
+  if (db.country && db.country !== 'auto' && typeof askCarFor === 'function') askCarFor(db.country, true);
   if (!navigator.geolocation) { gpsFailed('Este navegador no permite usar el GPS.'); return; }
   if (draft.pos) showNear();
   else {
@@ -368,7 +436,7 @@ function onLivePos(p) {
     return;
   }
   if (draft.simulated) return;
-  if (!draft.pos) { draft.pos = np; lastLive = Date.now(); showNear(); return; }
+  if (!draft.pos) { draft.pos = np; lastLive = Date.now(); showNear(); const c = countryAt(np.lat, np.lon); if (c && typeof askCarFor === 'function') askCarFor(c, false); return; }
   const moved = distM(draft.pos, np);
   if (moved < 8 && Date.now() - lastLive < 10000) return; // sin cambios relevantes
   draft.pos = np; lastLive = Date.now();
@@ -421,6 +489,7 @@ function gpsFailed(msg) {
 }
 function showNear() {
   const pos = draft.pos;
+  updateCountryChip();
   if (!showNear.busy) ensureCountryFor(pos).then((changed) => { if (changed) { showNear.busy = true; showNear(); showNear.busy = false; } });
   $('#gps-msg').innerHTML = draft.simulated
     ? `Estás fuera de ${COUNTRIES[db.country].name}: <b>tocá el mapa donde estás</b> (o buscá la estación).`
@@ -574,7 +643,8 @@ const bearing = (a, b) => { const r = Math.PI / 180, y = Math.sin((b.lon - a.lon
 const BRAND_COLORS = { YPF: ['#0055A5', '#fff'], Shell: ['#FFD100', '#14212B'], Axion: ['#6D2077', '#fff'], Puma: ['#D6001C', '#fff'],
   Blanca: ['#5A6772', '#fff'], Dapsa: ['#C94A05', '#fff'], Gulf: ['#F58025', '#14212B'], Refinor: ['#00843D', '#fff'], VOY: ['#167D72', '#fff'],
   Repsol: ['#E35205', '#fff'], BP: ['#007A33', '#fff'], Cepsa: ['#C8102E', '#fff'], Moeve: ['#00594F', '#fff'], Galp: ['#E87722', '#14212B'],
-  Ballenoil: ['#0072CE', '#fff'], Plenergy: ['#6CC24A', '#14212B'], Petroprix: ['#E4002B', '#fff'], Petronor: ['#00843D', '#fff'], Independiente: ['#5A6772', '#fff'] };
+  Ballenoil: ['#0072CE', '#fff'], Plenergy: ['#6CC24A', '#14212B'], Petroprix: ['#E4002B', '#fff'], Petronor: ['#00843D', '#fff'], Independiente: ['#5A6772', '#fff'],
+  Petrobras: ['#008542', '#FFE600'], Ipiranga: ['#FFD100', '#003C7E'], ALE: ['#0047BB', '#fff'], 'Bandeira branca': ['#5A6772', '#fff'] };
 const brandColor = (b) => BRAND_COLORS[b] || ['#14212B', '#fff'];
 let lmap = null, lPins = null, lMe = null, lMarkers = {};
 const pinIcon = (s, sel) => { const [bg, fg] = brandColor(s.brand);
@@ -653,7 +723,7 @@ function updateRoute() {
 /* ---------------- PASO 2: combustible ---------------- */
 function renderStep2() {
   if (!FUELS.includes(draft.fuel)) draft.fuel = FUELS.includes(db.lastFuel) ? db.lastFuel : FUELS[0]; // cambió el país
-  $('#lbl-total').textContent = `Total pagado (${COUNTRIES[COUNTRY].cur === 'EUR' ? '€' : '$'})`;
+  $('#lbl-total').textContent = `Total pagado (${CUR_SYM[COUNTRIES[COUNTRY].cur]})`;
   $('#step2-where').textContent = 'Paso 2 de 3 · ' + (draft.station ? stationLabel(draft.station) : '');
   $('#fuel-hint').textContent = db.lastFuel && draft.fuel === db.lastFuel ? 'Como la última vez' : '';
   $('#fuel-pills').style.gridTemplateColumns = `repeat(${FUELS.length > 4 ? 3 : 4}, minmax(0, 1fr))`;
@@ -886,7 +956,8 @@ function barChart(months) {
 /* ---------------- MI AUTO ---------------- */
 function renderCar() {
   $('#country').value = db.country || 'auto';
-  $('#country-info').textContent = `Ahora: ${COUNTRIES[COUNTRY].name}` + (COUNTRY === 'ES' && pricesDate ? ` · precios oficiales del ${pricesDate.split(' ')[0]}` : COUNTRY === 'AR' ? ' · base preparada a mano' : '');
+  $('#country-info').textContent = `Ahora: ${COUNTRIES[COUNTRY].name}` + (COUNTRY === 'ES' && pricesDate ? ` · precios oficiales del ${pricesDate.split(' ')[0]}` : COUNTRY === 'AR' ? ' · base preparada a mano'
+    : COUNTRY === 'BR' ? ` · ANP (sin precios por ahora) · estado${loadedRegions.length > 1 ? 's' : ''} ${loadedRegions.join(', ')}` : '');
   const c = db.car;
   $('#c-brand').value = c.brand; $('#c-model').value = c.model; $('#c-year').value = c.year; $('#c-tank').value = c.tank;
   $('#car-saved').classList.add('hidden');
@@ -902,6 +973,7 @@ function renderCar() {
   const mine = db.userStations.length, fixed = Object.keys(db.corrections).length;
   $('#db-info').textContent = `${COUNTRIES[COUNTRY].name} · base ${stationsVersion} · ${fmt(officialCount)} estaciones` +
     (mine ? ` · ${mine} agregada${mine > 1 ? 's' : ''} por vos` : '') + (fixed ? ` · ${fixed} corregida${fixed > 1 ? 's' : ''}` : '');
+  if (typeof renderGarage === 'function') renderGarage();
   if (typeof renderCloud === 'function') renderCloud();
 }
 $('#car-form').onsubmit = (e) => {
@@ -1028,8 +1100,9 @@ function pickCountry() {
       db.country = k; save();
       const want = k === 'auto' ? (draft.pos && !draft.simulated ? countryAt(draft.pos.lat, draft.pos.lon) || COUNTRY : COUNTRY) : k;
       if (want !== COUNTRY) await loadStations(want);
-      draft.pos = null; draft.simulated = false; draft.station = null; draft.manualPick = false;
+      draft.pos = null; draft.simulated = false; draft.station = null; draft.manualPick = false; draft.carAsked = false;
       if (current === 'step1') renderStep1();
+      if (typeof askCarFor === 'function') askCarFor(COUNTRY, k !== 'auto');
     } })));
 }
 document.addEventListener('click', (e) => { if (e.target.closest('#country-chip')) pickCountry(); });

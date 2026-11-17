@@ -10,8 +10,8 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="leaflet.css?v=19">
-<link rel="stylesheet" href="styles.css?v=19">
+<link rel="stylesheet" href="leaflet.css?v=20">
+<link rel="stylesheet" href="styles.css?v=20">
 </head>
 <body>
 <main id="app">
@@ -241,7 +241,9 @@
 <!-- ============ MI AUTO ============ -->
 <section class="screen" id="s-car" data-nav="car">
   <div class="pad col gap14 grow scroll">
-    <div class="row center gap12 rise"><button class="back" data-go="home" aria-label="Volver al inicio"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button><h1 class="h1">Mi auto</h1></div>
+    <div class="row center gap12 rise"><button class="back" data-go="home" aria-label="Volver al inicio"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button><h1 class="h1">Mis autos</h1></div>
+    <div class="card col gap10 rise d1" id="garage"></div>
+    <h2 class="h2 rise d1 mt6">Datos del auto en uso</h2>
     <form class="card col gap10 rise d1" id="car-form">
       <div class="grid2">
         <div class="col gap6"><label for="c-brand" class="muted xs b6">Marca</label><input id="c-brand" class="field" placeholder="Toyota"></div>
@@ -262,6 +264,7 @@
         <option value="auto">Automático (según dónde estés)</option>
         <option value="AR">Argentina</option>
         <option value="ES">España</option>
+        <option value="BR">Brasil</option>
       </select>
       <span class="muted xs" id="country-info"></span>
     </div>
@@ -304,10 +307,11 @@
 </div>
 <div class="toast hidden" id="toast" role="status"></div>
 </main>
-<script src="leaflet.js?v=19"></script>
-<script src="app.js?v=19"></script>
-<script src="supabase.js?v=19"></script>
-<script src="cloud.js?v=19"></script>
-<script src="trips.js?v=19"></script>
+<script src="leaflet.js?v=20"></script>
+<script src="app.js?v=20"></script>
+<script src="cars.js?v=20"></script>
+<script src="supabase.js?v=20"></script>
+<script src="cloud.js?v=20"></script>
+<script src="trips.js?v=20"></script>
 </body>
 </html>
