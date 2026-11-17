@@ -14,7 +14,8 @@ let FUELS = COUNTRIES.AR.fuels;
 // País según la posición GPS (cajas aproximadas; España incluye Baleares y Canarias)
 function countryAt(lat, lon) {
   if (lat < -20 && lat > -56 && lon > -74 && lon < -53) return 'AR';
-  if ((lat > 35.8 && lat < 43.9 && lon > -9.5 && lon < 4.4) || (lat > 27.5 && lat < 29.5 && lon > -18.3 && lon < -13.3)) return 'ES';
+  if ((lat > 35.8 && lat < 43.9 && lon > -9.5 && lon < 4.4) || (lat > 27.5 && lat < 29.5 && lon > -18.3 && lon < -13.3)
+    || (lat > 35.1 && lat < 35.95 && lon > -5.5 && lon < -2.8)) return 'ES'; // + Ceuta y Melilla
   return null;
 }
 const BRANDS = ['YPF', 'Shell', 'Axion', 'Puma', 'Blanca', 'Dapsa', 'Gulf', 'Refinor', 'VOY', 'Otra'];

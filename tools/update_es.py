@@ -32,10 +32,16 @@ def title(s):
 BRANDS = {"repsol": "Repsol", "cepsa": "Cepsa", "moeve": "Moeve", "bp": "BP", "shell": "Shell", "galp": "Galp",
           "petronor": "Petronor", "campsa": "Campsa", "ballenoil": "Ballenoil", "plenoil": "Plenoil",
           "petroprix": "Petroprix", "avia": "Avia", "carrefour": "Carrefour", "alcampo": "Alcampo",
-          "eroski": "Eroski", "disa": "Disa", "meroil": "Meroil"}
+          "eroski": "Eroski", "disa": "Disa", "meroil": "Meroil", "plenergy": "Plenergy", "q8": "Q8", "esclatoil": "Esclatoil"}
+
+def in_spain(lat, lon):  # península + Baleares, Canarias, Ceuta y Melilla: descarta coordenadas erróneas
+    return ((35.8 < lat < 43.9 and -9.5 < lon < 4.4) or (27.5 < lat < 29.5 and -18.3 < lon < -13.3)
+            or (35.1 < lat < 35.95 and -5.5 < lon < -2.8))
 
 def brand(rotulo):
     n = norm(rotulo)
+    if not n or n.startswith("n") and any(ch.isdigit() for ch in n[:6]) or n[0].isdigit() or n in ("sin rotulo", "s/r"):
+        return "Independiente"
     for k, v in BRANDS.items():
         if n.startswith(k):
             return v
@@ -105,10 +111,11 @@ def main(out):
             if k and e.get(k) not in (None, ""):
                 return e[k]
         return ""
-    rows = []
+    rows, skipped = [], 0
     for e in lista:
         lat, lon = num(get(e, "Latitud"), 5), num(get(e, "Longitud (WGS84)", "Longitud"), 5)
-        if lat is None or lon is None:
+        if lat is None or lon is None or not in_spain(lat, lon):
+            skipped += 1
             continue
         prices = [num(get(e, *f[1])) for f in FUELS]
         rows.append(["es-" + str(get(e, "IDEESS")), brand(get(e, "Rótulo")), title(get(e, "Dirección")),
@@ -118,7 +125,7 @@ def main(out):
                "fuels": [f[0] for f in FUELS], "fields": ["id", "brand", "address", "city", "province", "lat", "lon", "prices"], "rows": rows}
     with open(out, "w", encoding="utf-8") as f:
         json.dump(out_obj, f, ensure_ascii=False, separators=(",", ":"))
-    print(f"OK: {len(rows)} estaciones, precios del {fecha}")
+    print(f"OK: {len(rows)} estaciones ({skipped} descartadas por coordenadas), precios del {fecha}")
 
 if __name__ == "__main__":
     main(sys.argv[1] if len(sys.argv) > 1 else "estaciones-ES.json")
