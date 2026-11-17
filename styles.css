@@ -262,3 +262,5 @@ select.field{appearance:auto}
 .tchart text{stroke:none;font-family:'Inter',system-ui,sans-serif}
 /* Los mapas dibujan rutas y círculos con SVG: no aplicarles el tamaño de 22 px de los íconos */
 .leaflet-container svg{width:auto;height:auto}
+
+.chip-country{align-self:flex-start;background:#fff;border-radius:999px;padding:6px 12px;font-size:12px;font-weight:600;color:var(--green);box-shadow:0 1px 3px rgba(20,33,43,.08);min-height:32px}

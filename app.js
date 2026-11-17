@@ -5,8 +5,8 @@
 const KEY = 'miconsumo.v1';
 /* Países: cada uno con su base de estaciones, combustibles y moneda */
 const COUNTRIES = {
-  AR: { name: 'Argentina', file: 'stations.json', cur: 'ARS', fuels: ['Súper', 'Premium', 'Diésel', 'GNC'] },
-  ES: { name: 'España', file: 'estaciones-ES.json', cur: 'EUR', fuels: ['Gasolina 95', 'Gasolina 98', 'Diésel', 'Diésel+', 'GLP'],
+  AR: { name: 'Argentina', center: [-34.6037, -58.3816], file: 'stations.json', cur: 'ARS', fuels: ['Súper', 'Premium', 'Diésel', 'GNC'] },
+  ES: { name: 'España', center: [40.4168, -3.7038], file: 'estaciones-ES.json', cur: 'EUR', fuels: ['Gasolina 95', 'Gasolina 98', 'Diésel', 'Diésel+', 'GLP'],
         priceIdx: { 'Gasolina 95': 0, 'Gasolina 98': 1, 'Diésel': 2, 'Diésel+': 3, 'GLP': 4 } }
 };
 let COUNTRY = 'AR';
@@ -323,6 +323,8 @@ function spark(vals) {
 /* ---------------- PASO 1: ubicación ---------------- */
 let nearList = [];
 function renderStep1() {
+  const cc = $('#country-chip');
+  if (cc) { cc.textContent = 'País: ' + (db.country && db.country !== 'auto' ? COUNTRIES[db.country].name : 'automático (' + COUNTRIES[COUNTRY].name + ')') + ' ▾'; }
   hideHere();
   $('#search-box').classList.add('hidden');
   $('#search-input').value = '';
@@ -360,6 +362,12 @@ function onLivePos(p) {
   if (heading != null && !isNaN(heading)) lastHeading = heading;
   lastFix = { lat: np.lat, lon: np.lon, t: p.timestamp };
   if (speed != null && !isNaN(speed)) { speedNow = speed; if (speed > 1.5) wasMoving = true; $('#drive-warn').classList.toggle('hidden', speed < 3.3); }
+  // País elegido a mano y el GPS está en otro: se simula la ubicación (tocando el mapa)
+  if (db.country && db.country !== 'auto' && countryAt(np.lat, np.lon) !== db.country) {
+    if (!draft.pos) { draft.simulated = true; const c = COUNTRIES[db.country].center; draft.pos = { lat: c[0], lon: c[1], acc: 30 }; showNear(); }
+    return;
+  }
+  if (draft.simulated) return;
   if (!draft.pos) { draft.pos = np; lastLive = Date.now(); showNear(); return; }
   const moved = distM(draft.pos, np);
   if (moved < 8 && Date.now() - lastLive < 10000) return; // sin cambios relevantes
@@ -414,13 +422,15 @@ function gpsFailed(msg) {
 function showNear() {
   const pos = draft.pos;
   if (!showNear.busy) ensureCountryFor(pos).then((changed) => { if (changed) { showNear.busy = true; showNear(); showNear.busy = false; } });
-  $('#gps-msg').innerHTML = '<span class="live-dot"></span>Siguiendo tu ubicación en vivo. Tocá tu estación o esperá a llegar.';
+  $('#gps-msg').innerHTML = draft.simulated
+    ? `Estás fuera de ${COUNTRIES[db.country].name}: <b>tocá el mapa donde estás</b> (o buscá la estación).`
+    : '<span class="live-dot"></span>Siguiendo tu ubicación en vivo. Tocá tu estación o esperá a llegar.';
   const nearest = STATIONS.map((s) => ({ s, d: distM(pos, s) })).sort((a, b) => a.d - b.d).slice(0, 3);
   // Si estás prácticamente en una estación (a pocos metros), preguntamos directamente
   const close = Math.max(60, Math.min(pos.acc || 0, 100));
-  if (!draft.manualPick && nearest.length && nearest[0].d <= close) { showHere(nearest[0]); return; }
+  if (!draft.manualPick && (!draft.simulated || draft.simTapped) && nearest.length && nearest[0].d <= close) { showHere(nearest[0]); return; }
   hideHere();
-  if (!draft.station && !draft.manualPick && nearest.length && nearest[0].d < 300) draft.station = nearest[0].s; // la más cercana, preseleccionada
+  if (!draft.station && !draft.manualPick && (!draft.simulated || draft.simTapped) && nearest.length && nearest[0].d < 300) draft.station = nearest[0].s; // la más cercana, preseleccionada
   initMap(nearest.filter((x) => x.d < 5000));
   updateNext1(); updateRoute();
 }
@@ -580,6 +590,8 @@ function initMap(nearest) {
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(lmap);
     lMe = L.layerGroup().addTo(lmap); lPins = L.layerGroup().addTo(lmap);
     lmap.on('moveend', updateVisible);
+    // En modo simulado, tocar el mapa fija "dónde estás"
+    lmap.on('click', (e) => { if (!draft.simulated || rotOn) return; draft.pos = { lat: e.latlng.lat, lon: e.latlng.lng, acc: 10 }; draft.simTapped = true; draft.station = null; draft.manualPick = false; showNear(); });
     lmap.on('dragstart', () => { userPanned = true; $('#recenter').classList.remove('hidden'); });
     $('#recenter').onclick = () => { userPanned = false; $('#recenter').classList.add('hidden'); lmap.setView([draft.pos.lat, draft.pos.lon], Math.max(lmap.getZoom(), 15)); };
     $('#compass').onclick = () => { // alterna: girar con el rumbo / norte siempre arriba
@@ -1003,11 +1015,24 @@ window.addEventListener('popstate', () => {
 });
 
 $('#country').onchange = async (e) => {
-  db.country = e.target.value; save();
+  db.country = e.target.value; save(); draft.pos = null; draft.simulated = false;
   const want = db.country === 'auto' ? COUNTRY : db.country;
   if (want !== COUNTRY) await loadStations(want);
   renderCar();
 };
+
+function pickCountry() {
+  const opts = [['auto', 'Automático (según el GPS)'], ...Object.entries(COUNTRIES).map(([k, c]) => [k, c.name])];
+  sheet('¿En qué país cargás?', '<p class="muted xs" style="margin:0">Si elegís un país distinto de donde estás, el mapa se abre allí y tocás tu ubicación (sirve para probar).</p>',
+    opts.map(([k, lab]) => ({ label: (((db.country || 'auto') === k) ? '✓ ' : '') + lab, primary: false, run: async () => {
+      db.country = k; save();
+      const want = k === 'auto' ? (draft.pos && !draft.simulated ? countryAt(draft.pos.lat, draft.pos.lon) || COUNTRY : COUNTRY) : k;
+      if (want !== COUNTRY) await loadStations(want);
+      draft.pos = null; draft.simulated = false; draft.station = null; draft.manualPick = false;
+      if (current === 'step1') renderStep1();
+    } })));
+}
+document.addEventListener('click', (e) => { if (e.target.closest('#country-chip')) pickCountry(); });
 
 /* ---------------- Arranque ---------------- */
 const RENDER = { home: renderHome, step1: renderStep1, step2: renderStep2, step3: renderStep3, done: renderDone, history: renderHistory, car: renderCar, trips: () => renderTrips() };

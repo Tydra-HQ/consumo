@@ -1,7 +1,7 @@
 // Service worker: keeps the app working offline.
 // Bump VERSION on every release so phones pick up the new files.
-const VERSION = 'v18-2026-11-17';
-const V = '?v=18'; // igual que en index.html: cada versión usa nombres nuevos y el teléfono no reutiliza archivos viejos
+const VERSION = 'v19-2026-11-17';
+const V = '?v=19'; // igual que en index.html: cada versión usa nombres nuevos y el teléfono no reutiliza archivos viejos
 const FILES = ['./', 'index.html', 'styles.css' + V, 'app.js' + V, 'stations.json', 'manifest.webmanifest',
   'icon-192.png', 'icon-512.png', 'leaflet.js' + V, 'leaflet.css' + V, 'supabase.js' + V, 'cloud.js' + V, 'trips.js' + V];
 
