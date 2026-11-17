@@ -125,15 +125,24 @@ def main(out):
     ufs = {}
     today = datetime.date.today().isoformat()
     for uf, rows in sorted(by.items()):
-        lats = sorted(r[5] for r in rows); lons = sorted(r[6] for r in rows)
-        k = max(2, -(-len(rows) // 100))  # recuadro sin el 1 % de puntos extremos (coordenadas mal cargadas)
-        ufs[uf] = {"n": len(rows), "bbox": [lats[k - 1], lons[k - 1], lats[-k], lons[-k]]}
+        ufs[uf] = {"n": len(rows)}
         with open(f"estaciones-BR-{uf}.json", "w", encoding="utf-8") as fh:
             json.dump({"version": today, "pricesDate": None, "country": "BR", "currency": "BRL",
                        "fields": ["id", "brand", "address", "city", "province", "lat", "lon", "prices"], "rows": rows},
                       fh, ensure_ascii=False, separators=(",", ":"))
+    # Grilla de 1°×1°: qué estados tienen estaciones en cada cuadrado (2 o más, para ignorar coordenadas mal cargadas)
+    cnt = {}
+    for r in st:
+        key = f"{int(r[5] // 1)},{int(r[6] // 1)}"
+        cnt.setdefault(key, {}).setdefault(r[4], 0)
+        cnt[key][r[4]] += 1
+    cells = {}
+    for key, d in cnt.items():
+        u = [k for k, v in sorted(d.items(), key=lambda x: -x[1]) if v >= 2]
+        if u:
+            cells[key] = u
     with open(out, "w", encoding="utf-8") as fh:
-        json.dump({"version": today, "source": "ANP – API Revendedores", "total": len(st), "ufs": ufs}, fh, ensure_ascii=False, separators=(",", ":"))
+        json.dump({"version": today, "source": "ANP – API Revendedores", "total": len(st), "ufs": ufs, "cells": cells}, fh, ensure_ascii=False, separators=(",", ":"))
     print("Estados:", {k: v["n"] for k, v in ufs.items()})
 
 if __name__ == "__main__":
