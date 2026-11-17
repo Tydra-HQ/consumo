@@ -62,7 +62,25 @@ def main():
             best = r
     if not best:
         md.append("\nNo hay un recurso CSV."); open("reportes/auditoria-AR.md", "w").write("\n".join(md)); sys.exit(1)
-    raw = get(best["url"])
+    # Guardar ya lo que se sabe del dataset (por si la descarga falla)
+    open("reportes/auditoria-AR.md", "w", encoding="utf-8").write("\n".join(md) + "\n")
+    print(f"::notice::Dataset '{pkg.get('title')}' en {host}, modificado {pkg.get('metadata_modified')}; archivo: {best.get('name')} ({best.get('last_modified') or best.get('created')}) {best.get('url')}"[:1000])
+    raw, errs = None, []
+    u = best["url"]
+    variants = [u, u.replace("http://", "https://"), u.replace("https://", "http://")]
+    if "datos.energia.gob.ar" in u:
+        variants.append(u.replace("datos.energia.gob.ar", "datos.gob.ar"))
+    for v in dict.fromkeys(variants):
+        for attempt in range(2):
+            try:
+                raw = get(v, 600); break
+            except Exception as e:
+                errs.append(f"{v} intento {attempt + 1}: {type(e).__name__}: {e}")
+        if raw: break
+    if raw is None:
+        md += ["", "**No se pudo descargar el archivo:**"] + [f"- {e}" for e in errs]
+        open("reportes/auditoria-AR.md", "w", encoding="utf-8").write("\n".join(md) + "\n")
+        print("::error::Descarga fallida: " + " | ".join(errs)[:900]); sys.exit(1)
     text = raw.decode("utf-8-sig", errors="replace")
     if text.count("�") > 50:
         text = raw.decode("latin-1")
