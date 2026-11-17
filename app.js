@@ -370,7 +370,7 @@ function currentTankId() {
 }
 function loadRow(l, seg, inUse) {
   return `<div class="load">
-    <span class="brand" style="background:${brandColor(l.brand)[0]};color:${brandColor(l.brand)[1]}">${esc(brandAbbr(l.brand))}</span>
+    ${brandBox(l.brand)}
     <div class="col gap2" style="min-width:0">
       <span class="t ellipsis">${esc(l.stationName)}</span>
       <span class="s">${shortDate(l.date)} · ${fmt(l.liters, 1)} l · ${esc(tr(l.fuel))}${l.full ? '' : ' · ' + tr('parcial')}</span>
@@ -403,8 +403,7 @@ function pickBrands() {
   STATIONS.forEach((s) => { cnt[s.brand] = (cnt[s.brand] || 0) + 1; });
   const brands = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a]).slice(0, 24), f = brandFilter();
   sheet('¿Qué banderas querés ver?', `<div class="brandgrid">${brands.map((b) => {
-    const [bg, fg] = brandColor(b);
-    return `<label class="brandopt"><input type="checkbox" value="${esc(b)}" ${f.includes(b) ? 'checked' : ''}><span class="brand" style="background:${bg};color:${fg}">${esc(brandAbbr(b))}</span><span class="small b6 ellipsis">${esc(b)}</span></label>`;
+    return `<label class="brandopt"><input type="checkbox" value="${esc(b)}" ${f.includes(b) ? 'checked' : ''}>${brandBox(b)}<span class="small b6 ellipsis">${esc(b)}</span></label>`;
   }).join('')}</div><span class="muted xs">Sin ninguna marcada se ven todas.</span>`,
   [{ label: 'Aplicar', primary: true, run: () => {
       db.brandFilter = db.brandFilter || {};
@@ -538,7 +537,7 @@ function renderOptions(sel, list) {
     <button class="opt ${draft.station && draft.station.id === s.id ? 'sel' : ''}" data-i="${i}">
       <span class="dot"></span>
       <span class="col gap2" style="min-width:0">
-        <span class="t"><span class="bchip" style="background:${brandColor(s.brand)[0]};color:${brandColor(s.brand)[1]}">${esc(s.brand)}</span>${s.mine ? '<span class="mine">TUYA</span>' : ''}</span>
+        <span class="t">${brandBox(s.brand, 'bchip')}${s.mine ? '<span class="mine">TUYA</span>' : ''}</span>
         <span class="s ellipsis">${esc(s.address)} · ${esc(s.city)}</span>
       </span>
       <span class="col gap2" style="align-items:flex-end;margin-left:auto"><span class="d">${d == null ? '' : distTxt(d)}</span>${stationPrice(s, draft.fuel) ? `<span class="xs b6 accent">${money(stationPrice(s, draft.fuel))}</span>` : ''}</span>
@@ -619,7 +618,7 @@ function showHere(item) {
   const s = item.s, [bg, fg] = brandColor(s.brand);
   draft.station = s;
   $('#gps-msg').textContent = 'Te encontramos en una estación.';
-  $('#here-brand').innerHTML = `<span class="bchip" style="background:${bg};color:${fg}">${esc(s.brand)}</span>`;
+  $('#here-brand').innerHTML = brandBox(s.brand, 'bchip');
   $('#here-addr').textContent = s.address;
   $('#here-dist').textContent = (s.city ? s.city + ' · ' : '') + 'a ' + distTxt(item.d) + ' de vos';
   ['#map-wrap', '#route', '#pick-list', '#foot1'].forEach((q) => $(q).classList.add('hidden'));
@@ -678,9 +677,19 @@ const brandColor = (b) => BRAND_COLORS[b] || ['#14212B', '#fff'];
 let lmap = null, lPins = null, lMe = null, lMarkers = {};
 // Con zoom cercano (o la estación elegida) el cartel muestra también el precio del combustible habitual
 const PRICE_ZOOM = 15;
+// Logos de marcas (Wikimedia Commons); las demás se muestran con su color
+const LOGOS = new Set(['axion', 'bp', 'ballenoil', 'campsa', 'esso', 'galp', 'gulf', 'moeve', 'petrobras', 'petronor', 'petroprix', 'puma', 'q8', 'repsol', 'shell', 'ypf']);
+const logoOf = (b) => { const k = String(b || '').toLowerCase().replace(/[^a-z0-9]+/g, '-'); return LOGOS.has(k) ? 'logos/' + k + '.png' : null; };
+const brandBox = (b, cls = 'brand') => { const lg = logoOf(b), [bg, fg] = brandColor(b);
+  // en los cuadraditos, de los logos muy anchos mostramos solo el símbolo de la izquierda
+  const icon = cls === 'brand' && /repsol|petronor|petrobras/.test(lg || '') ? ' icon' : '';
+  return lg ? `<span class="${cls} logo${icon}"><img src="${lg}" alt="${esc(b)}"></span>` : `<span class="${cls}" style="background:${bg};color:${fg}">${esc(cls === 'brand' ? brandAbbr(b) : b)}</span>`; };
 const pinIcon = (s, sel) => { const [bg, fg] = brandColor(s.brand);
   const p = (sel || (lmap && lmap.getZoom() >= PRICE_ZOOM)) ? stationPrice(s, draft.fuel) : null;
-  return L.divIcon({ className: 'lf-icon', iconSize: null, html: `<span class="lf-pin ${sel ? 'sel' : ''}" style="--pc:${bg};color:${fg}">${esc(s.brand)}${p ? `<b class="pp">${money(p)}</b>` : ''}</span>` }); };
+  const lg = logoOf(s.brand);
+  return L.divIcon({ className: 'lf-icon', iconSize: null, html: lg
+    ? `<span class="lf-pin logo ${sel ? 'sel' : ''}" style="--pc:#fff"><img src="${lg}" alt="${esc(s.brand)}">${p ? `<b class="pp">${money(p)}</b>` : ''}</span>`
+    : `<span class="lf-pin ${sel ? 'sel' : ''}" style="--pc:${bg};color:${fg}">${esc(s.brand)}${p ? `<b class="pp">${money(p)}</b>` : ''}</span>` }); };
 function initMap(nearest) {
   const el = $('#map');
   if (typeof L === 'undefined') { // sin la librería del mapa: solo lista

@@ -30,12 +30,7 @@
   "wikidata": "Q1296860",
   "bytes": 21384
  },
- "Refinor": {
-  "file": "logos/refinor.png",
-  "commons": "OpenRefine logo (2018-present).svg",
-  "wikidata": null,
-  "bytes": 3696
- },
+ "Refinor": null,
  "Repsol": {
   "file": "logos/repsol.png",
   "commons": "Repsol 2025.svg",
@@ -54,12 +49,7 @@
   "wikidata": "Q608819",
   "bytes": 3775
  },
- "Cepsa": {
-  "file": "logos/cepsa.png",
-  "commons": "Cuatro Torres Business Area, logo de cepsa, Madrid, España, 2015.JPG",
-  "wikidata": null,
-  "bytes": 10795
- },
+ "Cepsa": null,
  "Galp": {
   "file": "logos/galp.png",
   "commons": "Galp Logo 2024.svg",
@@ -85,19 +75,9 @@
   "wikidata": "Q1726547",
   "bytes": 10413
  },
- "Carrefour": {
-  "file": "logos/carrefour.png",
-  "commons": "Carrefour-Mobile-logo.svg",
-  "wikidata": null,
-  "bytes": 3652
- },
+ "Carrefour": null,
  "Disa": null,
- "Avia": {
-  "file": "logos/avia.png",
-  "commons": "AVIA Volt Logo.svg",
-  "wikidata": null,
-  "bytes": 5846
- },
+ "Avia": null,
  "Q8": {
   "file": "logos/q8.png",
   "commons": "Q8 logo.svg",
@@ -110,12 +90,7 @@
   "wikidata": "Q210047",
   "bytes": 4714
  },
- "Ipiranga": {
-  "file": "logos/ipiranga.png",
-  "commons": "Logotipo do Grupo Ultra (2024).svg",
-  "wikidata": "Q1579222",
-  "bytes": 2941
- },
+ "Ipiranga": null,
  "ALE": null,
  "Esso": {
   "file": "logos/esso.png",

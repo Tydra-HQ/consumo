@@ -11,3 +11,6 @@ App web (PWA) para registrar las cargas de combustible del auto y seguir su cons
 Usar la app: https://tydra-hq.github.io/consumo/
 
 © 2026 Tydra-HQ. Todos los derechos reservados.
+
+## Logos
+Los logos de las marcas vienen de Wikimedia Commons (lista en `logos/fuentes.json`) y se usan solo para identificar cada estación. Son marcas registradas de sus respectivos dueños; la app no está asociada a ninguna petrolera.
