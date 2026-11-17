@@ -10,8 +10,8 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&display=swap">
-<link rel="stylesheet" href="leaflet.css?v=17">
-<link rel="stylesheet" href="styles.css?v=17">
+<link rel="stylesheet" href="leaflet.css?v=18">
+<link rel="stylesheet" href="styles.css?v=18">
 </head>
 <body>
 <main id="app">
@@ -136,11 +136,12 @@
         <input id="in-liters" class="field bigfield" inputmode="decimal" autocomplete="off" placeholder="0">
       </div>
       <div class="col gap6">
-        <label for="in-total" class="muted small b6">Total pagado ($)</label>
+        <label for="in-total" class="muted small b6" id="lbl-total">Total pagado ($)</label>
         <input id="in-total" class="field bigfield" inputmode="decimal" autocomplete="off" placeholder="0">
       </div>
     </div>
 
+    <div class="card row center gap10 hidden" id="price-hint" style="padding:10px 14px"></div>
     <div class="pill-info rise d3"><span>Precio por litro</span><strong id="ppl">—</strong></div>
 
     <div class="card row center gap14 rise d4">
@@ -254,6 +255,15 @@
     </form>
 
     <div class="card col gap8 rise d2" id="car-stats"></div>
+    <div class="card col gap8 rise d2">
+      <label for="country" class="b6">País de las estaciones</label>
+      <select id="country" class="field">
+        <option value="auto">Automático (según dónde estés)</option>
+        <option value="AR">Argentina</option>
+        <option value="ES">España</option>
+      </select>
+      <span class="muted xs" id="country-info"></span>
+    </div>
 
     <div class="card col gap10 rise d2" id="trip-settings"></div>
 
@@ -293,10 +303,10 @@
 </div>
 <div class="toast hidden" id="toast" role="status"></div>
 </main>
-<script src="leaflet.js?v=17"></script>
-<script src="app.js?v=17"></script>
-<script src="supabase.js?v=17"></script>
-<script src="cloud.js?v=17"></script>
-<script src="trips.js?v=17"></script>
+<script src="leaflet.js?v=18"></script>
+<script src="app.js?v=18"></script>
+<script src="supabase.js?v=18"></script>
+<script src="cloud.js?v=18"></script>
+<script src="trips.js?v=18"></script>
 </body>
 </html>

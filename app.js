@@ -3,7 +3,20 @@
 
 /* ---------------- Datos y almacenamiento ---------------- */
 const KEY = 'miconsumo.v1';
-const FUELS = ['Súper', 'Premium', 'Diésel', 'GNC'];
+/* Países: cada uno con su base de estaciones, combustibles y moneda */
+const COUNTRIES = {
+  AR: { name: 'Argentina', file: 'stations.json', cur: 'ARS', fuels: ['Súper', 'Premium', 'Diésel', 'GNC'] },
+  ES: { name: 'España', file: 'estaciones-ES.json', cur: 'EUR', fuels: ['Gasolina 95', 'Gasolina 98', 'Diésel', 'Diésel+', 'GLP'],
+        priceIdx: { 'Gasolina 95': 0, 'Gasolina 98': 1, 'Diésel': 2, 'Diésel+': 3, 'GLP': 4 } }
+};
+let COUNTRY = 'AR';
+let FUELS = COUNTRIES.AR.fuels;
+// País según la posición GPS (cajas aproximadas; España incluye Baleares y Canarias)
+function countryAt(lat, lon) {
+  if (lat < -20 && lat > -56 && lon > -74 && lon < -53) return 'AR';
+  if ((lat > 35.8 && lat < 43.9 && lon > -9.5 && lon < 4.4) || (lat > 27.5 && lat < 29.5 && lon > -18.3 && lon < -13.3)) return 'ES';
+  return null;
+}
 const BRANDS = ['YPF', 'Shell', 'Axion', 'Puma', 'Blanca', 'Dapsa', 'Gulf', 'Refinor', 'VOY', 'Otra'];
 
 const blank = () => ({
@@ -36,18 +49,33 @@ function save() {
 let STATIONS = [];        // base oficial + correcciones + estaciones propias
 let stationsVersion = '';
 let officialCount = 0;
-async function loadStations() {
+let pricesDate = '';
+async function loadStations(code) {
+  code = code || (db.country && db.country !== 'auto' ? db.country : (db.lastCountry || 'AR'));
+  const C = COUNTRIES[code] || COUNTRIES.AR;
+  COUNTRY = COUNTRIES[code] ? code : 'AR'; FUELS = C.fuels; db.lastCountry = COUNTRY;
+  if (!FUELS.includes(db.lastFuel)) db.lastFuel = null;
   try {
-    const res = await fetch('stations.json');
+    const res = await fetch(C.file);
+    if (!res.ok) throw new Error(res.status);
     const data = await res.json();
-    stationsVersion = data.version;
+    stationsVersion = data.version; pricesDate = data.pricesDate || '';
     officialCount = data.rows.length;
-    STATIONS = data.rows.map((r) => ({ id: r[0], brand: r[1], address: r[2], city: r[3], province: r[4], lat: r[5], lon: r[6] }));
+    STATIONS = data.rows.map((r) => ({ id: r[0], brand: r[1], address: r[2], city: r[3], province: r[4], lat: r[5], lon: r[6], prices: r[7] || null }));
   } catch (e) {
-    STATIONS = [];
-    toast('No se pudo cargar la base de estaciones.');
+    STATIONS = []; stationsVersion = ''; officialCount = 0;
+    toast(`No se pudo cargar la base de estaciones de ${C.name}.`);
   }
   mergeUserLayer();
+}
+// Si el país está en "automático" y el GPS dice que estás en otro, cambia de base
+async function ensureCountryFor(pos) {
+  if (db.country && db.country !== 'auto') return false;
+  const c = countryAt(pos.lat, pos.lon);
+  if (!c || c === COUNTRY) return false;
+  toast(`Estás en ${COUNTRIES[c].name}: cargando sus estaciones…`);
+  await loadStations(c); save();
+  return true;
 }
 function mergeUserLayer() {
   STATIONS = STATIONS.filter((s) => !s.mine && !s.ov);
@@ -74,7 +102,10 @@ const $$ = (s) => Array.from(document.querySelectorAll(s));
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const norm = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const fmt = (n, d = 0) => Number(n).toLocaleString('es-AR', { minimumFractionDigits: d, maximumFractionDigits: d });
-const money = (n) => '$ ' + fmt(Math.round(n));
+// Moneda: pesos sin decimales; euros con 2 (o 3 para precio por litro)
+const curOf = (cur) => cur || COUNTRIES[COUNTRY].cur;
+const money = (n, cur) => (curOf(cur) === 'EUR' ? fmt(n, n < 10 ? (n < 3 ? 3 : 2) : 2) + ' €' : '$ ' + fmt(Math.round(n)));
+const sameCur = (l) => (l.cur || 'ARS') === COUNTRIES[COUNTRY].cur;
 const MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 const shortDate = (iso) => { const d = new Date(iso); return d.getDate() + ' ' + MONTHS[d.getMonth()]; };
 
@@ -149,8 +180,10 @@ function currentCpk() {
   const kml = summary(segments()).kml;
   if (!kml || !db.loads.length) return null;
   const since = Date.now() - 30 * 864e5;
-  let recent = db.loads.filter((l) => new Date(l.date).getTime() >= since);
-  if (!recent.length) recent = [db.loads.slice().sort((a, b) => new Date(b.date) - new Date(a.date))[0]]; // sin cargas en el mes: la última
+  const mine = db.loads.filter(sameCur);
+  if (!mine.length) return null;
+  let recent = mine.filter((l) => new Date(l.date).getTime() >= since);
+  if (!recent.length) recent = [mine.slice().sort((a, b) => new Date(b.date) - new Date(a.date))[0]]; // sin cargas en el mes: la última
   const ppl = recent.reduce((a, l) => a + l.total, 0) / recent.reduce((a, l) => a + l.liters, 0);
   return ppl / kml;
 }
@@ -217,7 +250,7 @@ renderTabbars();
 
 /* ---------------- Borrador de la carga en curso ---------------- */
 const todayStr = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
-const newDraft = () => ({ date: todayStr(), manualPick: false, station: null, fuel: db.lastFuel || FUELS[0], liters: '', total: '', full: true, odo: '', pos: null });
+const newDraft = () => ({ date: todayStr(), manualPick: false, station: null, fuel: FUELS.includes(db.lastFuel) ? db.lastFuel : FUELS[0], liters: '', total: '', full: true, odo: '', pos: null });
 let draft = newDraft();
 
 /* ---------------- INICIO ---------------- */
@@ -251,7 +284,7 @@ function renderHome() {
   const cpk = currentCpk();
   $('#st-cpk').textContent = cpk ? money(cpk) : '—';
   const now = new Date();
-  const month = db.loads.filter((l) => { const d = new Date(l.date); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); })
+  const month = db.loads.filter((l) => { const d = new Date(l.date); if (!sameCur(l)) return false; return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); })
     .reduce((a, l) => a + l.total, 0);
   $('#st-month').textContent = month ? money(month) : '$ 0';
 
@@ -379,6 +412,7 @@ function gpsFailed(msg) {
 }
 function showNear() {
   const pos = draft.pos;
+  if (!showNear.busy) ensureCountryFor(pos).then((changed) => { if (changed) { showNear.busy = true; showNear(); showNear.busy = false; } });
   $('#gps-msg').innerHTML = '<span class="live-dot"></span>Siguiendo tu ubicación en vivo. Tocá tu estación o esperá a llegar.';
   const nearest = STATIONS.map((s) => ({ s, d: distM(pos, s) })).sort((a, b) => a.d - b.d).slice(0, 3);
   // Si estás prácticamente en una estación (a pocos metros), preguntamos directamente
@@ -603,8 +637,11 @@ function updateRoute() {
 
 /* ---------------- PASO 2: combustible ---------------- */
 function renderStep2() {
+  if (!FUELS.includes(draft.fuel)) draft.fuel = FUELS.includes(db.lastFuel) ? db.lastFuel : FUELS[0]; // cambió el país
+  $('#lbl-total').textContent = `Total pagado (${COUNTRIES[COUNTRY].cur === 'EUR' ? '€' : '$'})`;
   $('#step2-where').textContent = 'Paso 2 de 3 · ' + (draft.station ? stationLabel(draft.station) : '');
   $('#fuel-hint').textContent = db.lastFuel && draft.fuel === db.lastFuel ? 'Como la última vez' : '';
+  $('#fuel-pills').style.gridTemplateColumns = `repeat(${FUELS.length > 4 ? 3 : 4}, minmax(0, 1fr))`;
   $('#fuel-pills').innerHTML = FUELS.map((f) => `<button class="pill ${f === draft.fuel ? 'sel' : ''}" aria-pressed="${f === draft.fuel}">${f}</button>`).join('');
   $$('#fuel-pills .pill').forEach((b, i) => b.onclick = () => { draft.fuel = FUELS[i]; renderStep2(); });
   $('#in-date').value = draft.date; $('#in-date').max = todayStr();
@@ -613,12 +650,30 @@ function renderStep2() {
   setToggle(draft.full);
   calcPpl();
 }
+// Precio oficial del día en esta estación (España): sugerencia para no tipear el total
+function stationPrice() {
+  const C = COUNTRIES[COUNTRY], s = draft.station;
+  if (!C.priceIdx || !s || !s.prices) return null;
+  const p = s.prices[C.priceIdx[draft.fuel]];
+  return p > 0 ? p : null;
+}
+function renderPriceHint() {
+  const box = $('#price-hint'), p = stationPrice();
+  if (!p) { box.classList.add('hidden'); return; }
+  const l = parseNum(draft.liters);
+  box.classList.remove('hidden');
+  box.innerHTML = `<span class="grow">Precio oficial hoy: <b>${money(p)}/l</b>${pricesDate ? '<br><span class="xs muted">Ministerio, ' + esc(pricesDate.split(' ')[0]) + '</span>' : ''}</span>` +
+    (l > 0 && !parseNum(draft.total) ? `<button class="btn2" id="use-price" style="padding:0 12px;height:40px">Total: ${money(l * p)}</button>` : '');
+  const b = $('#use-price');
+  if (b) b.onclick = () => { $('#in-total').value = String((Math.round(l * p * 100) / 100)).replace('.', ','); calcPpl(); };
+}
 function calcPpl() {
   draft.liters = $('#in-liters').value; draft.total = $('#in-total').value;
   const l = parseNum(draft.liters), t = parseNum(draft.total);
   const ok = l > 0 && t > 0;
   $('#ppl').textContent = ok ? money(t / l) : '—';
   $('#next2').disabled = !ok;
+  renderPriceHint();
 }
 $('#in-liters').addEventListener('input', calcPpl);
 $('#in-date').addEventListener('change', (e) => { draft.date = e.target.value && e.target.value <= todayStr() ? e.target.value : todayStr(); e.target.value = draft.date; });
@@ -679,7 +734,7 @@ function commit(odo) {
     id: 'l-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6), date: draft.date === todayStr() ? new Date().toISOString() : new Date(draft.date + 'T12:00:00').toISOString(),
     stationId: s.id, stationName: stationLabel(s), brand: s.brand,
     lat: draft.pos ? draft.pos.lat : null, lon: draft.pos ? draft.pos.lon : null,
-    fuel: draft.fuel, liters: parseNum(draft.liters), total: parseNum(draft.total), full: draft.full, odo
+    fuel: draft.fuel, cur: COUNTRIES[COUNTRY].cur, country: COUNTRY, liters: parseNum(draft.liters), total: parseNum(draft.total), full: draft.full, odo
   };
   const newest = odo > lastOdo();
   db.loads.push(load);
@@ -815,6 +870,8 @@ function barChart(months) {
 
 /* ---------------- MI AUTO ---------------- */
 function renderCar() {
+  $('#country').value = db.country || 'auto';
+  $('#country-info').textContent = `Ahora: ${COUNTRIES[COUNTRY].name}` + (COUNTRY === 'ES' && pricesDate ? ` · precios oficiales del ${pricesDate.split(' ')[0]}` : COUNTRY === 'AR' ? ' · base preparada a mano' : '');
   const c = db.car;
   $('#c-brand').value = c.brand; $('#c-model').value = c.model; $('#c-year').value = c.year; $('#c-tank').value = c.tank;
   $('#car-saved').classList.add('hidden');
@@ -828,7 +885,7 @@ function renderCar() {
     </div>
     <span class="muted xs">Total gastado: ${money(spent)}</span>`;
   const mine = db.userStations.length, fixed = Object.keys(db.corrections).length;
-  $('#db-info').textContent = `Base de estaciones ${stationsVersion} · ${fmt(officialCount)} estaciones` +
+  $('#db-info').textContent = `${COUNTRIES[COUNTRY].name} · base ${stationsVersion} · ${fmt(officialCount)} estaciones` +
     (mine ? ` · ${mine} agregada${mine > 1 ? 's' : ''} por vos` : '') + (fixed ? ` · ${fixed} corregida${fixed > 1 ? 's' : ''}` : '');
   if (typeof renderCloud === 'function') renderCloud();
 }
@@ -941,6 +998,13 @@ window.addEventListener('popstate', () => {
   if (current !== 'home' && BACK[current]) { go(BACK[current]); history.pushState({ app: true }, ''); return; }
   history.back(); // en el inicio: salir de la app
 });
+
+$('#country').onchange = async (e) => {
+  db.country = e.target.value; save();
+  const want = db.country === 'auto' ? COUNTRY : db.country;
+  if (want !== COUNTRY) await loadStations(want);
+  renderCar();
+};
 
 /* ---------------- Arranque ---------------- */
 const RENDER = { home: renderHome, step1: renderStep1, step2: renderStep2, step3: renderStep3, done: renderDone, history: renderHistory, car: renderCar, trips: () => renderTrips() };
