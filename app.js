@@ -562,7 +562,9 @@ const bearing = (a, b) => { const r = Math.PI / 180, y = Math.sin((b.lon - a.lon
 
 /* Mapa real: Leaflet + OpenStreetMap (necesita internet para las calles; sin conexión la lista sigue funcionando) */
 const BRAND_COLORS = { YPF: ['#0055A5', '#fff'], Shell: ['#FFD100', '#14212B'], Axion: ['#6D2077', '#fff'], Puma: ['#D6001C', '#fff'],
-  Blanca: ['#5A6772', '#fff'], Dapsa: ['#C94A05', '#fff'], Gulf: ['#F58025', '#14212B'], Refinor: ['#00843D', '#fff'], VOY: ['#167D72', '#fff'] };
+  Blanca: ['#5A6772', '#fff'], Dapsa: ['#C94A05', '#fff'], Gulf: ['#F58025', '#14212B'], Refinor: ['#00843D', '#fff'], VOY: ['#167D72', '#fff'],
+  Repsol: ['#E35205', '#fff'], BP: ['#007A33', '#fff'], Cepsa: ['#C8102E', '#fff'], Moeve: ['#00594F', '#fff'], Galp: ['#E87722', '#14212B'],
+  Ballenoil: ['#0072CE', '#fff'], Plenergy: ['#6CC24A', '#14212B'], Petroprix: ['#E4002B', '#fff'], Petronor: ['#00843D', '#fff'], Independiente: ['#5A6772', '#fff'] };
 const brandColor = (b) => BRAND_COLORS[b] || ['#14212B', '#fff'];
 let lmap = null, lPins = null, lMe = null, lMarkers = {};
 const pinIcon = (s, sel) => { const [bg, fg] = brandColor(s.brand);
