@@ -126,7 +126,7 @@ def main(out):
     today = datetime.date.today().isoformat()
     for uf, rows in sorted(by.items()):
         lats = sorted(r[5] for r in rows); lons = sorted(r[6] for r in rows)
-        k = max(1, len(rows) // 200)  # recuadro sin los puntos extremos (coordenadas mal cargadas)
+        k = max(2, -(-len(rows) // 100))  # recuadro sin el 1 % de puntos extremos (coordenadas mal cargadas)
         ufs[uf] = {"n": len(rows), "bbox": [lats[k - 1], lons[k - 1], lats[-k], lons[-k]]}
         with open(f"estaciones-BR-{uf}.json", "w", encoding="utf-8") as fh:
             json.dump({"version": today, "pricesDate": None, "country": "BR", "currency": "BRL",
