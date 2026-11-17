@@ -1,0 +1,98 @@
+{
+ "YPF": {
+  "file": "logos/ypf.png",
+  "commons": "Logo de YPF.svg",
+  "wikidata": "Q2006989",
+  "bytes": 2145
+ },
+ "Shell": {
+  "file": "logos/shell.png",
+  "commons": "Shell wordmark 2019.svg",
+  "wikidata": "Q154950",
+  "bytes": 3185
+ },
+ "Axion": null,
+ "Puma": {
+  "file": "logos/puma.png",
+  "commons": "Puma Energy logo.svg",
+  "wikidata": "Q7259769",
+  "bytes": 5850
+ },
+ "Dapsa": null,
+ "Gulf": {
+  "file": "logos/gulf.png",
+  "commons": "Gulf Oil logo.svg",
+  "wikidata": "Q1296860",
+  "bytes": 21384
+ },
+ "Refinor": null,
+ "Repsol": {
+  "file": "logos/repsol.png",
+  "commons": "Repsol 2025.svg",
+  "wikidata": "Q174747",
+  "bytes": 10058
+ },
+ "BP": {
+  "file": "logos/bp.png",
+  "commons": "Bp textlogo.svg",
+  "wikidata": "Q152057",
+  "bytes": 7620
+ },
+ "Moeve": {
+  "file": "logos/moeve.png",
+  "commons": "Moeve logo.svg",
+  "wikidata": "Q608819",
+  "bytes": 3775
+ },
+ "Cepsa": null,
+ "Galp": {
+  "file": "logos/galp.png",
+  "commons": "Galp Logo 2024.svg",
+  "wikidata": "Q1492739",
+  "bytes": 6696
+ },
+ "Ballenoil": null,
+ "Plenergy": null,
+ "Petroprix": {
+  "file": "logos/petroprix.png",
+  "commons": "Logo Petroprix.svg",
+  "wikidata": "Q128327113",
+  "bytes": 7906
+ },
+ "Petronor": {
+  "file": "logos/petronor.png",
+  "commons": "Petronor logo 2024.png",
+  "wikidata": "Q1726547",
+  "bytes": 10413
+ },
+ "Carrefour": null,
+ "Disa": null,
+ "Avia": null,
+ "Q8": {
+  "file": "logos/q8.png",
+  "commons": "Q8 logo.svg",
+  "wikidata": "Q4119207",
+  "bytes": 9525
+ },
+ "Petrobras": {
+  "file": "logos/petrobras.png",
+  "commons": "Petrobras horizontal logo.svg",
+  "wikidata": "Q210047",
+  "bytes": 4714
+ },
+ "Ipiranga": {
+  "file": "logos/ipiranga.png",
+  "commons": "Logotipo do Grupo Ultra (2024).svg",
+  "wikidata": "Q1579222",
+  "bytes": 2941
+ },
+ "ALE": null,
+ "Esso": {
+  "file": "logos/esso.png",
+  "commons": "Esso textlogo.svg",
+  "wikidata": "Q867662",
+  "bytes": 13111
+ },
+ "Campsa": null,
+ "Alcampo": null
+}
