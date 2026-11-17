@@ -1,0 +1,22 @@
+# Baja los logos de marcas (a mano, cuando haga falta)
+name: Logos de marcas
+on:
+  workflow_dispatch:
+  push:
+    paths: [tools/fetch_logos.py]
+permissions:
+  contents: write
+jobs:
+  logos:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with: { python-version: "3.12" }
+      - run: python tools/fetch_logos.py
+      - run: |
+          git config user.name "robot-estaciones"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A logos
+          git diff --cached --quiet || git commit -m "Logos de marcas"
+          git pull --rebase && git push
