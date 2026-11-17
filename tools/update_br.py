@@ -91,7 +91,7 @@ def main(out):
     print("Metadatos:", meta, "| registros en la página 1:", len(rows))
     with open("reportes/br-muestra.json", "w", encoding="utf-8") as fh:
         json.dump({"meta": meta, "muestra": rows[:3]}, fh, ensure_ascii=False, indent=1)
-    pages = int(pick(meta, "pagina", "pages", "totalpag") or 1) if meta else 1
+    pages = int(pick(flat(meta), "totalpagina", "totalpages") or 1) if meta else 1
     pages = max(1, min(pages, 40))
     for p in range(2, pages + 1):
         print("Página", p, "de", pages)
