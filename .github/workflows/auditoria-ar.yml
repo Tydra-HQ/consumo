@@ -1,12 +1,10 @@
 # Compara todos los meses la base oficial argentina de estaciones con la de la app y deja un informe.
 # NO cambia la base de la app: el informe es para que Leonardo decida qué corregir.
 name: Auditoría estaciones Argentina
+# El servidor de datos.energia.gob.ar no responde a conexiones desde fuera de Argentina (GitHub está en EE. UU.),
+# así que por ahora solo se corre a mano. La auditoría se hace con: python tools/audit_ar.py --file precios.csv
 on:
-  schedule:
-    - cron: "41 8 2 * *"   # el día 2 de cada mes
   workflow_dispatch:
-  push:
-    paths: [tools/audit_ar.py, .github/workflows/auditoria-ar.yml]
 permissions:
   contents: write
 jobs:

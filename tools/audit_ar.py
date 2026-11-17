@@ -14,6 +14,8 @@ def ctx():
     return c
 
 def get(url, timeout=300):
+    if url.startswith("file://"):
+        return open(url[7:], "rb").read()
     req = urllib.request.Request(url, headers=UA)
     return urllib.request.urlopen(req, timeout=timeout, context=ctx() if url.startswith("https") else None).read()
 
@@ -47,7 +49,12 @@ def find_dataset(log):
 
 def main():
     log, notes = [], []
-    host, pkg = find_dataset(log)
+    local = sys.argv[sys.argv.index("--file") + 1] if "--file" in sys.argv else None
+    if local:  # archivo descargado a mano desde Argentina (el servidor bloquea conexiones desde el exterior)
+        host, pkg = "archivo local", {"title": "Precios en Surtidor (archivo descargado a mano)", "metadata_modified": "—",
+                                      "resources": [{"name": os.path.basename(local), "format": "CSV", "url": "file://" + os.path.abspath(local)}]}
+    else:
+        host, pkg = find_dataset(log)
     os.makedirs("reportes", exist_ok=True)
     md = ["# Auditoría de la base oficial de estaciones (Argentina)", "", f"Generado: {datetime.datetime.utcnow():%Y-%m-%d %H:%M} UTC", ""]
     if not pkg:
