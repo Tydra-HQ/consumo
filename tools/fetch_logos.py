@@ -16,6 +16,11 @@ BRANDS = {
     "ALE": [("ptwiki", "ALE Combustíveis")], "Esso": [("enwiki", "Esso")], "Campsa": [("eswiki", "CAMPSA")], "Alcampo": [("eswiki", "Alcampo")],
 }
 
+SEARCH = {"Axion": "Axion Energy logo", "Ipiranga": "Ipiranga logo posto", "ALE": "ALE Combustíveis logo", "Disa": "Disa logo gasolinera",
+          "Cepsa": "Cepsa logo", "Carrefour": "Carrefour logo", "Avia": "Avia logo", "Ballenoil": "Ballenoil logo", "Plenergy": "Plenergy logo",
+          "Dapsa": "Dapsa logo", "Refinor": "Refinor logo", "Campsa": "Campsa logo", "Alcampo": "Alcampo logo"}
+ONLY = sys.argv[1:]  # opcional: solo estas marcas
+
 def get(url, raw=False):
     req = urllib.request.Request(url, headers=UA)
     with urllib.request.urlopen(req, timeout=60) as r:
@@ -36,8 +41,10 @@ def logo_file(site, title):
     return None, None
 
 os.makedirs("logos", exist_ok=True)
-report = {}
+report = json.load(open("logos/fuentes.json")) if os.path.exists("logos/fuentes.json") else {}
 for brand, tries in BRANDS.items():
+    if ONLY and brand not in ONLY:
+        continue
     got = None
     for site, title in tries:
         try:
@@ -48,7 +55,18 @@ for brand, tries in BRANDS.items():
             got = (f, qid, site, title); break
         time.sleep(0.5)
     if not got:
-        print(f"{brand}: sin logo en Wikidata"); report[brand] = None; continue
+        # Plan B: buscar un archivo "<marca> logo" en Wikimedia Commons
+        q = urllib.parse.urlencode({"action": "query", "list": "search", "srnamespace": 6, "srlimit": 5, "format": "json",
+                                    "srsearch": SEARCH.get(brand, brand + " logo")})
+        try:
+            hits = [h["title"][5:] for h in get("https://commons.wikimedia.org/w/api.php?" + q)["query"]["search"]]
+        except Exception as e:  # noqa
+            hits = []
+        hits = [h for h in hits if brand.lower()[:4] in h.lower() and "logo" in h.lower()]
+        if hits:
+            got = (hits[0], None, "commons-search", SEARCH.get(brand, brand + " logo"))
+    if not got:
+        print(f"{brand}: sin logo"); report[brand] = None; continue
     f, qid, site, title = got
     url = "https://commons.wikimedia.org/wiki/Special:FilePath/" + urllib.parse.quote(f) + "?width=192"
     try:
