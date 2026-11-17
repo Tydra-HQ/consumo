@@ -63,15 +63,30 @@ def fixed_context():
             print("Certificado intermedio agregado:", cert.subject.rfc4514_string())
     return ctx
 
+def legacy_context(base=None):
+    """Algunos servidores públicos solo aceptan configuraciones TLS antiguas que OpenSSL 3 rechaza por defecto."""
+    ctx = base or ssl.create_default_context()
+    ctx.set_ciphers("DEFAULT:@SECLEVEL=1")
+    ctx.options |= getattr(ssl, "OP_LEGACY_SERVER_CONNECT", 0x4)
+    ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+    return ctx
+
 def fetch():
-    req = urllib.request.Request(URL, headers={"Accept": "application/json", "User-Agent": "MiConsumo/1.0 (+https://tydra-hq.github.io/consumo/)"})
-    try:
-        return urllib.request.urlopen(req, timeout=180).read()
-    except urllib.error.URLError as e:
-        if not isinstance(getattr(e, "reason", None), ssl.SSLCertVerificationError):
-            raise
-        print("Falta el certificado intermedio; reintentando con la cadena completa…")
-        return urllib.request.urlopen(req, timeout=180, context=fixed_context()).read()
+    req = urllib.request.Request(URL, headers={"Accept": "application/json", "User-Agent": "Mozilla/5.0 (compatible; MiConsumo/1.0; +https://tydra-hq.github.io/consumo/)"})
+    tries = [("normal", lambda: None), ("TLS compatible", legacy_context)]
+    errors = []
+    for name, mk in tries:
+        try:
+            ctx = mk()
+            return urllib.request.urlopen(req, timeout=180, **({"context": ctx} if ctx else {})).read()
+        except urllib.error.URLError as e:
+            errors.append(f"{name}: {e.reason}")
+            if isinstance(getattr(e, "reason", None), ssl.SSLCertVerificationError):
+                try:
+                    return urllib.request.urlopen(req, timeout=180, context=legacy_context(fixed_context())).read()
+                except Exception as e2:
+                    errors.append(f"cadena completa: {e2}")
+    raise RuntimeError(" | ".join(errors))
 
 def main(out):
     try:
