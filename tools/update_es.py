@@ -1,7 +1,7 @@
 """Descarga las estaciones de servicio de España con sus precios del día (Ministerio para la
 Transición Ecológica, Geoportal de Gasolineras) y genera estaciones-ES.json para la app.
 Lo ejecuta GitHub Actions todas las mañanas. Solo usa la biblioteca estándar de Python."""
-import json, sys, unicodedata, urllib.request, datetime
+import json, ssl, sys, unicodedata, urllib.request, datetime
 
 URL = "https://sedeaplicaciones.minetur.gob.es/ServiciosRESTCarburantes/PreciosCarburantes/EstacionesTerrestres/"
 # combustibles de la app (en orden) -> campos posibles del ministerio
@@ -41,9 +41,44 @@ def brand(rotulo):
             return v
     return title(rotulo)[:24] or "Otra"
 
-def main(out):
+def fixed_context():
+    """El servidor del ministerio no envía el certificado intermedio (los navegadores lo buscan solos; Python no).
+    Lo descargamos desde la dirección que indica el propio certificado (AIA) y lo agregamos a los de confianza."""
+    from cryptography import x509
+    from cryptography.x509.oid import AuthorityInformationAccessOID, ExtensionOID
+    from cryptography.hazmat.primitives.serialization import Encoding
+    import certifi
+    host = URL.split("/")[2]
+    leaf = x509.load_pem_x509_certificate(ssl.get_server_certificate((host, 443)).encode())
+    aia = leaf.extensions.get_extension_for_oid(ExtensionOID.AUTHORITY_INFORMATION_ACCESS).value
+    ctx = ssl.create_default_context(cafile=certifi.where())
+    for d in aia:
+        if d.access_method == AuthorityInformationAccessOID.CA_ISSUERS:
+            der = urllib.request.urlopen(d.access_location.value, timeout=60).read()
+            try:
+                cert = x509.load_der_x509_certificate(der)
+            except ValueError:
+                cert = x509.load_pem_x509_certificate(der)
+            ctx.load_verify_locations(cadata=cert.public_bytes(Encoding.PEM).decode())
+            print("Certificado intermedio agregado:", cert.subject.rfc4514_string())
+    return ctx
+
+def fetch():
     req = urllib.request.Request(URL, headers={"Accept": "application/json", "User-Agent": "MiConsumo/1.0 (+https://tydra-hq.github.io/consumo/)"})
-    raw = urllib.request.urlopen(req, timeout=120).read().decode("utf-8-sig")
+    try:
+        return urllib.request.urlopen(req, timeout=180).read()
+    except urllib.error.URLError as e:
+        if not isinstance(getattr(e, "reason", None), ssl.SSLCertVerificationError):
+            raise
+        print("Falta el certificado intermedio; reintentando con la cadena completa…")
+        return urllib.request.urlopen(req, timeout=180, context=fixed_context()).read()
+
+def main(out):
+    try:
+        raw = fetch().decode("utf-8-sig")
+    except Exception as e:  # el error queda visible como anotación en GitHub
+        print(f"::error::No se pudo descargar: {type(e).__name__}: {e}")
+        raise
     data = json.loads(raw)
     lista = data.get("ListaEESSPrecio") or []
     if len(lista) < 5000:  # protección: si el servicio devuelve algo raro, no pisar el archivo bueno
