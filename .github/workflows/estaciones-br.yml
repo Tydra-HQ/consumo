@@ -1,6 +1,8 @@
-# Prueba: estaciones de Brasil (ANP). Todavía sin horario automático hasta confirmar que la API responde.
-name: Estaciones de Brasil (prueba)
+# Estaciones de Brasil (ANP, API Revendedores): todos los lunes.
+name: Estaciones de Brasil
 on:
+  schedule:
+    - cron: "41 8 * * 1"
   workflow_dispatch:
   push:
     paths: [tools/update_br.py, .github/workflows/estaciones-br.yml]
@@ -20,6 +22,6 @@ jobs:
         run: |
           git config user.name "robot-estaciones"
           git config user.email "actions@users.noreply.github.com"
-          git add -A estaciones-BR.json reportes/br-muestra.json 2>/dev/null || true
-          git diff --cached --quiet || git commit -m "Estaciones de Brasil (prueba): $(date -u +%F)"
+          git add -A estaciones-BR*.json reportes/br-muestra.json 2>/dev/null || true
+          git diff --cached --quiet || git commit -m "Estaciones de Brasil: $(date -u +%F)"
           git pull --rebase && git push

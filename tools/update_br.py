@@ -118,9 +118,23 @@ def main(out):
     if len(st) < 1000:
         print(f"::error::Muy pocas estaciones ({len(st)}); no se guarda el archivo.")
         sys.exit(1)
+    # Un archivo por estado (la app baja solo el de donde estás) + un índice con el recuadro de cada estado
+    by = {}
+    for r in st:
+        by.setdefault(r[4] or "XX", []).append(r)
+    ufs = {}
+    today = datetime.date.today().isoformat()
+    for uf, rows in sorted(by.items()):
+        lats = sorted(r[5] for r in rows); lons = sorted(r[6] for r in rows)
+        k = max(1, len(rows) // 200)  # recuadro sin los puntos extremos (coordenadas mal cargadas)
+        ufs[uf] = {"n": len(rows), "bbox": [lats[k - 1], lons[k - 1], lats[-k], lons[-k]]}
+        with open(f"estaciones-BR-{uf}.json", "w", encoding="utf-8") as fh:
+            json.dump({"version": today, "pricesDate": None, "country": "BR", "currency": "BRL",
+                       "fields": ["id", "brand", "address", "city", "province", "lat", "lon", "prices"], "rows": rows},
+                      fh, ensure_ascii=False, separators=(",", ":"))
     with open(out, "w", encoding="utf-8") as fh:
-        json.dump({"version": datetime.date.today().isoformat(), "pricesDate": None, "source": "ANP – API Revendedores",
-                   "stations": st}, fh, ensure_ascii=False, separators=(",", ":"))
+        json.dump({"version": today, "source": "ANP – API Revendedores", "total": len(st), "ufs": ufs}, fh, ensure_ascii=False, separators=(",", ":"))
+    print("Estados:", {k: v["n"] for k, v in ufs.items()})
 
 if __name__ == "__main__":
     try:
