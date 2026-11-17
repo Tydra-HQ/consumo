@@ -339,7 +339,7 @@ function renderTrips() {
     const s = aggregate([t]);
     return `<div class="card col gap8 ${t.include ? '' : 'trip-off'}">
       <div class="row between center gap8">
-        <span class="col gap2"><span class="b6 small">${d.getDate()} ${MONTHS[d.getMonth()]} · ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}</span>
+        <span class="col gap2"><span class="b6 small">${shortDate(d.toISOString())} · ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}</span>
         <span class="muted xs">${kindLabel[t.kind] || ''} · ${fmt(t.km, 1)} km · ${min} min · máx. ${Math.round(t.maxKmh)} km/h</span></span>
         <button class="del" data-tdel="${t.id}" aria-label="Borrar viaje"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>
       </div>
@@ -380,7 +380,7 @@ function renderTripDetail() {
   });
   body.innerHTML = `
     <div class="card col gap6">
-      <span class="b6">${d.getDate()} ${MONTHS[d.getMonth()]} · ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')} · ${fmt(t.km, 1)} km · ${Math.round((new Date(t.end) - d) / 60000)} min</span>
+      <span class="b6">${shortDate(d.toISOString())} · ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')} · ${fmt(t.km, 1)} km · ${Math.round((new Date(t.end) - d) / 60000)} min</span>
       <span class="small">Consumo estimado <b>${est ? fmt(est, 1) + ' km/l' : '—'}</b>${est && ppl ? ' · ' + money(t.km / est * ppl) : ''} · puntaje ${score(aggregate([t])) ?? '—'}/100</span>
     </div>
     <div class="trip-map-wrap"><div id="trip-map"></div></div>

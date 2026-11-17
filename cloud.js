@@ -96,7 +96,7 @@ function adoptCar(car, clear) {
   db.carId = car.id; db.lastPull = null;
   db.shareStats = car.share_stats !== false;
   if (car.brand || car.model || !db.car.model) {
-    db.car = { brand: car.brand || '', model: car.model || '', year: car.year ? String(car.year) : '', tank: car.tank ? String(car.tank) : '' };
+    db.car = { brand: car.brand || '', model: car.model || '', year: car.year ? String(car.year) : '', tank: car.tank ? String(car.tank) : '', fuel: db.car.fuel };
     db.carDirty = false;
   } else db.carDirty = true; // el auto en la nube está vacío: subimos los datos de este teléfono
   if (clear) { db.loads = []; db.dirty = []; db.tombstones = []; }
@@ -140,7 +140,7 @@ async function cloudSync() {
     if (db.carDirty) Object.assign(carUpd, { brand: db.car.brand || null, model: db.car.model || null, year: parseInt(db.car.year, 10) || null, tank: parseFloat(db.car.tank) || null });
     const { data: car, error: e4 } = await sb.from('cars').update(carUpd).eq('id', carId).select().single();
     if (e4) throw e4;
-    if (!db.carDirty && car) db.car = { brand: car.brand || '', model: car.model || '', year: car.year ? String(car.year) : '', tank: car.tank ? String(car.tank) : '' };
+    if (!db.carDirty && car) db.car = { brand: car.brand || '', model: car.model || '', year: car.year ? String(car.year) : '', tank: car.tank ? String(car.tank) : '', fuel: db.car.fuel };
     db.carDirty = false;
     myCars = myCars.map((c) => (c.id === carId ? car : c));
     // 5) Enviar sugerencias de estaciones pendientes
@@ -153,13 +153,19 @@ async function cloudSync() {
       if (!error) sg.sent = true;
     }
     // 6) Apodo guardado en la nube (por si se puso desde otro teléfono)
-    const { data: prof } = await sb.from('profiles').select('nickname').eq('id', user.id).maybeSingle();
+    if (db.langPending) { // eligió guardar el idioma en la cuenta antes de iniciar sesión
+      const { error } = await sb.from('profiles').upsert({ id: user.id, lang: db.langPending });
+      if (!error) { db.langPending = null; toast('Idioma guardado en tu cuenta.'); }
+    }
+    const { data: prof } = await sb.from('profiles').select('nickname, lang').eq('id', user.id).maybeSingle();
     if (prof) db.nickname = prof.nickname || '';
+    // Idioma de la cuenta: se aplica salvo que en este teléfono se haya elegido otro "solo acá"
+    if (prof && prof.lang && !db.langLocal && prof.lang !== (db.lang || LANG)) { db.lang = prof.lang; setLang(prof.lang, true); }
     // 7) ¿Sos administrador? (para aprobar sugerencias)
     const { data: adm } = await sb.rpc('is_admin');
     isAdmin = !!adm;
     save();
-    setStatus('Sincronizado ✓ ' + new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }));
+    setStatus('Sincronizado ✓ ' + new Date().toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' }));
     if (current === 'car') renderCloud(); // refrescar código, autos y ranking
     if (current === 'home') renderHome();
     if (rows && rows.length && typeof RENDER !== 'undefined' && RENDER[current] && !['step1', 'step2', 'step3', 'car'].includes(current)) RENDER[current]();

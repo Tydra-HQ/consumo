@@ -63,6 +63,9 @@ function openNewCar(opts, then) {
         <div class="col gap6"><label for="n-year" class="muted xs b6">Año (opcional)</label><input id="n-year" class="field" inputmode="numeric"></div>
         <div class="col gap6"><label for="n-tank" class="muted xs b6">Tanque (l, opcional)</label><input id="n-tank" class="field" inputmode="numeric"></div>
       </div>
+      <span class="muted xs b6">¿Qué combustible carga?</span>
+      <div class="seg3 segfuel" role="radiogroup" aria-label="Combustible habitual">${COUNTRIES[ctry].fuels.map((f) =>
+        `<label class="segopt"><input type="radio" name="nf" value="${esc(f)}"><span>${esc(f)}</span></label>`).join('')}</div>
       <label class="row center gap10 ${kind === 'own' ? 'hidden' : ''}" id="n-arch-row"><input type="checkbox" id="n-arch" ${kind === 'own' ? '' : 'checked'} style="width:22px;height:22px;accent-color:var(--green)">
         <span class="col gap2"><span class="small b6">Archivarlo cuando cambie de país</span><span class="muted xs">Sale de la lista y conserva su historial</span></span></label>
       <span class="muted xs">Se usa en ${esc(COUNTRIES[ctry].name)}. En la primera carga llená el tanque: el consumo aparece desde la segunda carga completa.</span>
@@ -71,9 +74,12 @@ function openNewCar(opts, then) {
         const model = $('#n-model').value.trim(), brand = $('#n-brand').value.trim();
         if (!model && !brand) { toast('Poné al menos la marca o el modelo.'); return false; }
         const k = (document.querySelector('input[name="nk"]:checked') || {}).value || 'own';
-        addCar({ brand, model, year: $('#n-year').value.trim(), tank: $('#n-tank').value.trim() },
+        const fuel = (document.querySelector('input[name="nf"]:checked') || {}).value;
+        if (!fuel) { toast('Elegí el combustible que carga.'); return false; }
+        addCar({ brand, model, year: $('#n-year').value.trim(), tank: $('#n-tank').value.trim(), fuel },
           { kind: k, country: ctry, archiveOnReturn: k !== 'own' && $('#n-arch').checked, lastUsed: Date.now(), seenIn: [ctry] });
         toast('Listo: ahora cargás con ' + carName(db.car) + '.');
+        draft.fuel = fuel;
         if (then) then(); else if (current === 'car') renderCar(); else if (current === 'home') renderHome();
       } }, { label: 'Cancelar' }]);
   $$('input[name="nk"]').forEach((r) => r.onchange = () => {
@@ -86,6 +92,8 @@ function openNewCar(opts, then) {
 function askCarFor(code, manual) {
   if (!code || !COUNTRIES[code] || draft.carAsked) return;
   const m = db.carMeta;
+  // Primera vez (sin cargas ni otros autos): el auto es de este país, no hace falta preguntar
+  if (!db.loads.length && !(db.garage || []).length) { if (m.country !== code) { m.country = code; save(); } return; }
   if (m.country === code || (m.seenIn || []).includes(code)) return;
   draft.carAsked = true;
   const others = (db.garage || []).filter((g) => !g.carMeta.archived || g.carMeta.country === code)
@@ -104,7 +112,7 @@ function askCarFor(code, manual) {
 }
 function markSeen(code) { db.carMeta.seenIn = Array.from(new Set((db.carMeta.seenIn || []).concat(code))); save(); }
 function refreshAfterCar() {
-  draft.fuel = FUELS.includes(db.lastFuel) ? db.lastFuel : draft.fuel;
+  draft.fuel = prefFuel();
   if (current === 'home') renderHome();
   if (current === 'car') renderCar();
 }
