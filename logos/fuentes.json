@@ -11,7 +11,12 @@
   "wikidata": "Q154950",
   "bytes": 3185
  },
- "Axion": null,
+ "Axion": {
+  "file": "logos/axion.png",
+  "commons": "Axion energy logo.png",
+  "wikidata": null,
+  "bytes": 22348
+ },
  "Puma": {
   "file": "logos/puma.png",
   "commons": "Puma Energy logo.svg",
@@ -25,7 +30,12 @@
   "wikidata": "Q1296860",
   "bytes": 21384
  },
- "Refinor": null,
+ "Refinor": {
+  "file": "logos/refinor.png",
+  "commons": "OpenRefine logo (2018-present).svg",
+  "wikidata": null,
+  "bytes": 3696
+ },
  "Repsol": {
   "file": "logos/repsol.png",
   "commons": "Repsol 2025.svg",
@@ -44,14 +54,24 @@
   "wikidata": "Q608819",
   "bytes": 3775
  },
- "Cepsa": null,
+ "Cepsa": {
+  "file": "logos/cepsa.png",
+  "commons": "Cuatro Torres Business Area, logo de cepsa, Madrid, España, 2015.JPG",
+  "wikidata": null,
+  "bytes": 10795
+ },
  "Galp": {
   "file": "logos/galp.png",
   "commons": "Galp Logo 2024.svg",
   "wikidata": "Q1492739",
   "bytes": 6696
  },
- "Ballenoil": null,
+ "Ballenoil": {
+  "file": "logos/ballenoil.png",
+  "commons": "Logo Ballenoil.svg",
+  "wikidata": null,
+  "bytes": 64182
+ },
  "Plenergy": null,
  "Petroprix": {
   "file": "logos/petroprix.png",
@@ -65,9 +85,19 @@
   "wikidata": "Q1726547",
   "bytes": 10413
  },
- "Carrefour": null,
+ "Carrefour": {
+  "file": "logos/carrefour.png",
+  "commons": "Carrefour-Mobile-logo.svg",
+  "wikidata": null,
+  "bytes": 3652
+ },
  "Disa": null,
- "Avia": null,
+ "Avia": {
+  "file": "logos/avia.png",
+  "commons": "AVIA Volt Logo.svg",
+  "wikidata": null,
+  "bytes": 5846
+ },
  "Q8": {
   "file": "logos/q8.png",
   "commons": "Q8 logo.svg",
@@ -93,6 +123,11 @@
   "wikidata": "Q867662",
   "bytes": 13111
  },
- "Campsa": null,
+ "Campsa": {
+  "file": "logos/campsa.png",
+  "commons": "Logo de Campsa.jpg",
+  "wikidata": null,
+  "bytes": 6946
+ },
  "Alcampo": null
 }
