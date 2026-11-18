@@ -314,3 +314,9 @@ select.field{appearance:auto}
 #recent .brand.logo.icon{width:36px}
 .brandopt .brand.logo{width:44px}
 .brandopt .brand.logo.icon{width:30px}
+/* Estación elegida: primera en la lista y con "Siguiente" en la misma fila */
+.optwrap{display:flex;flex-direction:column;gap:8px}
+.optwrap.on{background:#fff;border-radius:18px;padding:6px;box-shadow:0 0 0 2px var(--green),0 6px 16px rgba(11,110,90,.18)}
+.optwrap.on .opt{box-shadow:none;background:transparent}
+.next-inline{height:50px;font-size:17px;border-radius:14px}
+.next-inline svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}

@@ -70,6 +70,8 @@ const T = [
   ['Orientación del mapa', 'Map orientation', 'Orientação do mapa'],
   ['El mapa gira según tu rumbo', 'The map turns with your heading', 'O mapa gira conforme sua direção'],
   ['Norte siempre arriba', 'North always up', 'Norte sempre para cima'],
+  ['Hasta la estación: {} · # min', 'To the station: {} · # min', 'Até o posto: {} · # min'],
+  ['Hasta la estación: {} en línea recta', 'To the station: {} in a straight line', 'Até o posto: {} em linha reta'],
   ['Cómo llegar a {}', 'Directions to {}', 'Como chegar a {}'],
   ['Estaciones cerca tuyo', 'Stations near you', 'Postos perto de você'],
   ['Estaciones en el mapa (#)', 'Stations on the map (#)', 'Postos no mapa (#)'],

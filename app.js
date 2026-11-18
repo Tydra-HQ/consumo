@@ -438,7 +438,6 @@ function renderStep1() {
 /* GPS en vivo: mientras estás en el Paso 1, el mapa y la lista se actualizan a medida que te movés */
 let watchId = null, lastLive = 0, userPanned = false, lastFix = null, speedNow = 0, wasMoving = false;
 // Zoom según la velocidad, como un navegador: más rápido = más alejado, despacio = más cerca
-const zoomForSpeed = (v) => (v > 22 ? 14 : v > 11 ? 15 : v > 4 ? 16 : 17); // m/s: >80, >40, >15 km/h
 function startLive() {
   stopLive();
   userPanned = false;
@@ -490,14 +489,13 @@ function liveUpdate() {
   drawMe();
   if (!userPanned) {
     if (rotateOn && speedNow > 3.3 && lastHeading != null) setRotation(lastHeading);
-    if (wasMoving) {
-      const z = zoomForSpeed(speedNow);
-      if (z !== lmap.getZoom()) lmap.setView([pos.lat, pos.lon], z, { animate: true });
-      else lmap.panTo([pos.lat, pos.lon], { animate: true });
-    } else lmap.panTo([pos.lat, pos.lon], { animate: true });
+    // Sin cambiar el zoom: con una estación elegida, que vos y ella sigan en pantalla; si no, solo seguirte
+    if (draft.station) showBoth(false);
+    else if (!lmap.getBounds().pad(-0.2).contains([pos.lat, pos.lon])) lmap.panTo([pos.lat, pos.lon], { animate: true });
   }
   else updateVisible();
-  $('#gps-msg').innerHTML = '<span class="live-dot"></span>Siguiendo tu ubicación en vivo. Tocá tu estación o esperá a llegar.';
+  if (draft.station) drawRoute(false);
+  if (!draft.station) $('#gps-msg').innerHTML = '<span class="live-dot"></span>Siguiendo tu ubicación en vivo. Tocá tu estación o esperá a llegar.';
 }
 function gpsFailed(msg) {
   hideHere();
@@ -533,7 +531,13 @@ function showNear() {
 }
 function renderOptions(sel, list) {
   const box = $(sel);
+  // La estación elegida va primero, con el botón "Siguiente" en su misma fila
+  if (draft.station) {
+    const k = list.findIndex((x) => x.s.id === draft.station.id);
+    if (k > 0) list.unshift(list.splice(k, 1)[0]);
+  }
   box.innerHTML = list.map(({ s, d }, i) => `
+    <div class="optwrap ${draft.station && draft.station.id === s.id ? 'on' : ''}">
     <button class="opt ${draft.station && draft.station.id === s.id ? 'sel' : ''}" data-i="${i}">
       <span class="dot"></span>
       <span class="col gap2" style="min-width:0">
@@ -541,13 +545,21 @@ function renderOptions(sel, list) {
         <span class="s ellipsis">${esc(s.address)} · ${esc(s.city)}</span>
       </span>
       <span class="col gap2" style="align-items:flex-end;margin-left:auto"><span class="d">${d == null ? '' : distTxt(d)}</span>${stationPrice(s, draft.fuel) ? `<span class="xs b6 accent">${money(stationPrice(s, draft.fuel))}</span>` : ''}</span>
-    </button>`).join('');
+    </button>
+    ${draft.station && draft.station.id === s.id ? '<button class="next next-inline" type="button">Siguiente <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>' : ''}
+    </div>`).join('');
   box.querySelectorAll('.opt').forEach((b) => b.onclick = () => pickStation(list[+b.dataset.i], sel !== '#near-list'));
+  box.querySelectorAll('.next-inline').forEach((b) => b.onclick = () => go('step2'));
 }
 function pickStation(item, fromSearch) {
   draft.station = item.s;
   refreshSelection();
   updateNext1();
+  // reordenar la lista (la elegida arriba, con Siguiente) y mostrar vos + la estación en el mapa
+  renderOptions('#near-list', nearList);
+  if (fromSearch) renderOptions('#search-list', searchList);
+  showBoth(true); drawRoute(true);
+  const nt = $('#near-title'); if (nt && !fromSearch) nt.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   // Elegida desde la búsqueda pero lejos de la posición registrada: ofrecer corregirla
   if (fromSearch && draft.pos && item.d != null && item.d > 400) {
     sheet('¿Corregimos la ubicación?',
@@ -631,6 +643,43 @@ function hideHere() {
 $('#here-yes').onclick = () => go('step2');
 $('#here-no').onclick = () => { draft.manualPick = true; draft.station = null; showNear(); };
 
+// Vos y la estación elegida, los dos en pantalla (solo se reencuadra si alguno quedó afuera, o al elegir)
+function showBoth(force) {
+  if (!lmap || !draft.pos || !draft.station) return;
+  const a = [draft.pos.lat, draft.pos.lon], b = [draft.station.lat, draft.station.lon];
+  const in2 = lmap.getBounds().pad(-0.08);
+  if (force || !in2.contains(a) || !in2.contains(b)) lmap.fitBounds([a, b], { padding: [48, 48], maxZoom: Math.max(lmap.getZoom(), 15), animate: true });
+}
+// Recorrido hasta la estación: por calles (servicio OSRM) si responde; si no, una línea recta punteada
+let lRoute = null, routeFor = null, routeAt = null, routeBusy = false;
+async function drawRoute(force) {
+  if (!lmap) return;
+  if (!lRoute) lRoute = L.layerGroup().addTo(lmap);
+  const s = draft.station, p = draft.pos;
+  if (!s || !p) { lRoute.clearLayers(); routeFor = null; return; }
+  const moved = routeAt ? distM(routeAt, p) : Infinity;
+  if (!force && routeFor === s.id && moved < 250) return; // recalcular solo si te moviste bastante
+  routeFor = s.id; routeAt = { lat: p.lat, lon: p.lon };
+  const straight = () => { lRoute.clearLayers(); L.polyline([[p.lat, p.lon], [s.lat, s.lon]], { color: '#0B6E5A', weight: 4, dashArray: '6 8', opacity: .8, interactive: false }).addTo(lRoute); };
+  if (distM(p, s) < 80) { lRoute.clearLayers(); return; }
+  if (routeBusy) return;
+  routeBusy = true;
+  try {
+    const url = `https://router.project-osrm.org/route/v1/driving/${p.lon},${p.lat};${s.lon},${s.lat}?overview=full&geometries=geojson`;
+    const ctl = new AbortController(); setTimeout(() => ctl.abort(), 6000);
+    const r = await (await fetch(url, { signal: ctl.signal })).json();
+    const g = r.routes && r.routes[0];
+    if (!g || draft.station !== s) throw new Error('sin ruta');
+    lRoute.clearLayers();
+    L.polyline(g.geometry.coordinates.map(([lo, la]) => [la, lo]), { color: '#fff', weight: 8, opacity: .9, interactive: false }).addTo(lRoute);
+    L.polyline(g.geometry.coordinates.map(([lo, la]) => [la, lo]), { color: '#0B6E5A', weight: 5, opacity: .95, interactive: false }).addTo(lRoute);
+    const min = Math.max(1, Math.round(g.duration / 60)), km = g.distance / 1000;
+    $('#gps-msg').innerHTML = `<span class="live-dot"></span>Hasta la estación: ${km < 1 ? Math.round(g.distance) + ' m' : fmt(km, 1) + ' km'} · ${min} min`;
+  } catch (e) {
+    if (draft.station === s) { straight(); $('#gps-msg').innerHTML = `<span class="live-dot"></span>Hasta la estación: ${distTxt(distM(p, s))} en línea recta`; }
+  }
+  finally { routeBusy = false; }
+}
 function drawMe() {
   if (!lMe) return;
   lMe.clearLayers();
@@ -755,7 +804,7 @@ function refreshPins() {
 // "Cómo llegar": abre Google Maps con el recorrido hasta la estación elegida
 function updateRoute() {
   const a = $('#route'), s = draft.station;
-  if (!s) { a.classList.add('hidden'); return; }
+  if (!s) { a.classList.add('hidden'); if (lRoute) lRoute.clearLayers(); routeFor = null; return; }
   a.href = `https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lon}&travelmode=driving`;
   a.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l18-8-8 18-2-8z"/></svg><span class="ellipsis">Cómo llegar a ${esc(stationLabel(s))}</span><span aria-hidden="true">↗</span>`;
   a.classList.remove('hidden');
