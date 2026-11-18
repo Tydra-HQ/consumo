@@ -3,7 +3,7 @@ name: Logos de marcas
 on:
   workflow_dispatch:
   push:
-    paths: [tools/fetch_logos.py, tools/logo_candidates.py]
+    paths: [tools/fetch_logos.py, tools/logo_candidates.py, .github/workflows/logos.yml]
 permissions:
   contents: write
 jobs:
