@@ -20,6 +20,7 @@ SEARCH = {"Axion": "Axion Energy logo", "Ipiranga": "Ipiranga logo posto", "ALE"
           "Cepsa": "Cepsa logo", "Carrefour": "Carrefour logo", "Avia": "Avia logo", "Ballenoil": "Ballenoil logo", "Plenergy": "Plenergy logo",
           "Dapsa": "Dapsa logo", "Refinor": "Refinor logo", "Campsa": "Campsa logo", "Alcampo": "Alcampo logo"}
 ONLY = sys.argv[1:]  # opcional: solo estas marcas
+FORCE = {"Shell": "Shell logo.svg"}  # archivo de Commons elegido a mano (la concha de Shell)
 
 def get(url, raw=False):
     req = urllib.request.Request(url, headers=UA)
@@ -45,8 +46,8 @@ report = json.load(open("logos/fuentes.json")) if os.path.exists("logos/fuentes.
 for brand, tries in BRANDS.items():
     if ONLY and brand not in ONLY:
         continue
-    got = None
-    for site, title in tries:
+    got = (FORCE[brand], None, "commons", FORCE[brand]) if brand in FORCE else None
+    for site, title in ([] if got else tries):
         try:
             f, qid = logo_file(site, title)
         except Exception as e:  # noqa
