@@ -492,7 +492,10 @@ function setLang(l, rerender) {
 }
 // Idioma inicial: el guardado; si es la primera vez, el del teléfono
 (function initLang() {
-  let saved = null;
-  try { saved = (JSON.parse(localStorage.getItem('miconsumo.v1')) || {}).lang; } catch (e) { /* nada */ }
-  setLang(saved || detectLang(), false);
+  let d = {};
+  try { d = JSON.parse(localStorage.getItem('miconsumo.v1')) || {}; } catch (e) { /* nada */ }
+  // Quien ya usaba la app (antes de que hubiera idiomas) sigue en español; solo las instalaciones nuevas toman el idioma del teléfono
+  const before = !d.lang && ((d.loads && d.loads.length) || (d.car && d.car.model));
+  if (before) { d.lang = 'es'; try { localStorage.setItem('miconsumo.v1', JSON.stringify(d)); } catch (e) { /* nada */ } }
+  setLang(d.lang || detectLang(), false);
 })();

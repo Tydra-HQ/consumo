@@ -678,7 +678,7 @@ let lmap = null, lPins = null, lMe = null, lMarkers = {};
 // Con zoom cercano (o la estación elegida) el cartel muestra también el precio del combustible habitual
 const PRICE_ZOOM = 15;
 // Logos de marcas (Wikimedia Commons); las demás se muestran con su color
-const LOGOS = new Set(['axion', 'bp', 'ballenoil', 'campsa', 'esso', 'galp', 'gulf', 'moeve', 'petrobras', 'petronor', 'petroprix', 'puma', 'q8', 'repsol', 'shell', 'ypf']);
+const LOGOS = new Set(['axion', 'bp', 'ballenoil', 'campsa', 'esso', 'galp', 'gulf', 'moeve', 'petrobras', 'petronor', 'petroprix', 'puma', 'q8', 'repsol', 'shell', 'ypf', 'ipiranga']);
 const logoOf = (b) => { const k = String(b || '').toLowerCase().replace(/[^a-z0-9]+/g, '-'); return LOGOS.has(k) ? 'logos/' + k + '.png' : null; };
 const brandBox = (b, cls = 'brand') => { const lg = logoOf(b), [bg, fg] = brandColor(b);
   // en los cuadraditos, de los logos muy anchos mostramos solo el símbolo de la izquierda

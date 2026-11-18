@@ -1,9 +1,9 @@
 // Service worker: keeps the app working offline.
 // Bump VERSION on every release so phones pick up the new files.
-const VERSION = 'v22-2026-11-17';
-const V = '?v=22'; // igual que en index.html: cada versión usa nombres nuevos y el teléfono no reutiliza archivos viejos
+const VERSION = 'v23-2026-11-17';
+const V = '?v=23'; // igual que en index.html: cada versión usa nombres nuevos y el teléfono no reutiliza archivos viejos
 const FILES = ['./', 'index.html', 'styles.css' + V, 'app.js' + V, 'stations.json', 'manifest.webmanifest',
-  'icon-192.png', 'icon-512.png', 'leaflet.js' + V, 'leaflet.css' + V, 'supabase.js' + V, 'cloud.js' + V, 'trips.js' + V, 'cars.js' + V, 'i18n.js' + V, 'tour.js' + V].concat(['axion', 'bp', 'ballenoil', 'campsa', 'esso', 'galp', 'gulf', 'moeve', 'petrobras', 'petronor', 'petroprix', 'puma', 'q8', 'repsol', 'shell', 'ypf'].map((b) => 'logos/' + b + '.png'));
+  'icon-192.png', 'icon-512.png', 'leaflet.js' + V, 'leaflet.css' + V, 'supabase.js' + V, 'cloud.js' + V, 'trips.js' + V, 'cars.js' + V, 'i18n.js' + V, 'tour.js' + V].concat(['axion', 'bp', 'ballenoil', 'campsa', 'esso', 'galp', 'gulf', 'moeve', 'petrobras', 'petronor', 'petroprix', 'puma', 'q8', 'repsol', 'shell', 'ypf', 'ipiranga'].map((b) => 'logos/' + b + '.png'));
 
 self.addEventListener('install', (e) => {
   // Each file is cached on its own: one missing file must not break the whole install

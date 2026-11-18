@@ -5,7 +5,11 @@
   "wikidata": "Q2006989",
   "bytes": 2145
  },
- "Shell": null,
+ "Shell": {
+  "file": "logos/shell.png",
+  "commons": "Shell logo 1948.png",
+  "wikidata": null
+ },
  "Axion": {
   "file": "logos/axion.png",
   "commons": "Axion energy logo.png",
@@ -85,7 +89,11 @@
   "wikidata": "Q210047",
   "bytes": 4714
  },
- "Ipiranga": null,
+ "Ipiranga": {
+  "file": "logos/ipiranga.png",
+  "commons": null,
+  "nota": "imagen enviada por Leonardo"
+ },
  "ALE": null,
  "Esso": {
   "file": "logos/esso.png",
