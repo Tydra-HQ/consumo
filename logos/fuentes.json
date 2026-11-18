@@ -5,12 +5,7 @@
   "wikidata": "Q2006989",
   "bytes": 2145
  },
- "Shell": {
-  "file": "logos/shell.png",
-  "commons": "Shell wordmark 2019.svg",
-  "wikidata": "Q154950",
-  "bytes": 3185
- },
+ "Shell": null,
  "Axion": {
   "file": "logos/axion.png",
   "commons": "Axion energy logo.png",
