@@ -10,6 +10,7 @@ const STOP_SPEED = 2;                                      // detenido
 const HARSH_ACC = 3.0, HARSH_BRAKE = -3.5;                 // arranque fuerte / frenada brusca (GPS)
 const SENSOR_JERK = 4.0;                                   // movimiento brusco (sensor, sin gravedad)
 const END_AFTER_STOP = 4 * 60e3;                           // fin automático tras 4 min detenido
+const GAP_SEC = 15;                                       // más de 15 s sin lecturas = la app no estuvo en pantalla
 const GAP_CLOSE = 6 * 60e3;                                // si la app estuvo cerrada más de esto, se cierra el viaje
 
 let vBuf = [], lastTrackT = 0;
@@ -28,7 +29,8 @@ function renderTripSettings() {
   ];
   box.innerHTML = `
     <div class="row between center gap10">
-      <div class="col gap2"><span class="b6">Modo viaje</span><span class="muted xs">Registrar velocidad, tipo de vía, ralentí, arranques y frenadas para entender tu consumo.</span></div>
+      <div class="col gap2"><span class="b6">Modo viaje</span><span class="muted xs">Registrar velocidad, tipo de vía, ralentí, arranques y frenadas para entender tu consumo.</span>
+      <span class="xs b6 warn-txt">⚠ Solo registra mientras la app está en pantalla. Si pasás a otra app o se apaga la pantalla, ese tramo queda sin registrar.</span></div>
       <button class="toggle ${c.on ? 'on' : ''}" id="tg-trips" role="switch" aria-checked="${c.on}" aria-label="Registrar mis viajes"><span></span></button>
     </div>
     ${c.on ? `
@@ -67,7 +69,7 @@ function newTrip(t) {
 function beginTrip(t) {
   trip = newTrip(t || Date.now()); stoppedSince = null; lastTrackT = 0;
   startWatch(); keepAwake(true); setMotion(cfg().sensor);
-  renderTripChip(); toast('Viaje iniciado.');
+  renderTripChip(); toast('Viaje iniciado. Dejá la app en pantalla para que registre.');
 }
 function endTrip(keep) {
   if (!trip) return;
@@ -169,7 +171,7 @@ function renderTripChip() {
   if (!c.on) { el.innerHTML = ''; return; }
   if (trip) {
     const min = Math.round((Date.now() - new Date(trip.start)) / 60000);
-    el.innerHTML = `<div class="trip-live"><span class="live-dot"></span><span class="grow">Viaje en curso · ${fmt(trip.km, 1)} km · ${min} min</span><button class="btn2" id="trip-stop" style="height:40px;padding:0 14px">Terminar</button></div>`;
+    el.innerHTML = `<div class="trip-live"><span class="live-dot"></span><span class="grow col gap2"><span>Viaje en curso · ${fmt(trip.km, 1)} km · ${min} min</span><span class="xs muted">Dejá la app en pantalla mientras manejás</span></span><button class="btn2" id="trip-stop" style="height:40px;padding:0 14px">Terminar</button></div>`;
     $('#trip-stop').onclick = () => endTrip(true);
   } else if (c.mode === 'manual') {
     el.innerHTML = `<button class="trip-start" id="trip-go"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg> Iniciar viaje</button>`;
@@ -231,11 +233,20 @@ const baseK = () => summary(segments()).kml || 10;
 /* Consumo instantáneo con "potencia específica del vehículo" (VSP, modelo de la EPA de EE. UU.):
    VSP [kW/t] = v·(1,1·a + 0,132) + 0,000302·v³   → energía para acelerar, rodar y vencer el aire.
    Combustible [ml/s] ≈ 0,22 (ralentí, ~0,8 l/h) + 0,16 · VSP positiva. Luego se escala a TU rendimiento real. */
+// Huecos del recorrido: ratos en que la app no estuvo en pantalla (sin lecturas del GPS)
+function gapsOf(track) {
+  const g = [];
+  for (let i = 1; i < (track || []).length; i++) {
+    const a = track[i - 1], b = track[i];
+    if (b[0] - a[0] > GAP_SEC) g.push({ t0: a[0], t1: b[0], la0: a[1], lo0: a[2], la1: b[1], lo1: b[2], km: distM({ lat: a[1], lon: a[2] }, { lat: b[1], lon: b[2] }) / 1000 });
+  }
+  return g;
+}
 function trackSeries(track) {
   const out = []; let ml = 0, m = 0;
   for (let i = 1; i < (track || []).length; i++) {
     const [t0, la0, lo0, v0] = track[i - 1], [t1, la1, lo1, v1] = track[i];
-    const dt = t1 - t0; if (dt <= 0 || dt > 30) continue;
+    const dt = t1 - t0; if (dt <= 0 || dt > GAP_SEC) continue; // hueco: la app no estaba en pantalla
     const v = (v0 + v1) / 2, a = (v1 - v0) / dt, d = distM({ lat: la0, lon: lo0 }, { lat: la1, lon: lo1 });
     const vsp = v * (1.1 * a + 0.132) + 0.000302 * v * v * v;
     const f = (0.22 + 0.16 * Math.max(0, vsp)) * dt; // ml en este tramo
@@ -340,7 +351,7 @@ function renderTrips() {
     return `<div class="card col gap8 ${t.include ? '' : 'trip-off'}">
       <div class="row between center gap8">
         <span class="col gap2"><span class="b6 small">${shortDate(d.toISOString())} · ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}</span>
-        <span class="muted xs">${kindLabel[t.kind] || ''} · ${fmt(t.km, 1)} km · ${min} min · máx. ${Math.round(t.maxKmh)} km/h</span></span>
+        <span class="muted xs">${kindLabel[t.kind] || ''} · ${fmt(t.km, 1)} km · ${min} min · máx. ${Math.round(t.maxKmh)} km/h${t.track && gapsOf(t.track).length ? ' · ⚠ con pausas' : ''}</span></span>
         <button class="del" data-tdel="${t.id}" aria-label="Borrar viaje"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>
       </div>
       ${(() => { if (t.kind !== 'auto') return ''; const e = estKml([t]); if (!e) return ''; const l = t.km / e, ppl = recentPpl();
@@ -370,6 +381,7 @@ function renderTripDetail() {
   if (!t || !t.track || t.track.length < 4) { body.innerHTML = '<div class="empty">Este viaje no tiene recorrido guardado.</div>'; return; }
   const ser = trackSeries(t.track), ref = vspRef() || (ser.km / ser.liters), K = baseK(), scale = K / ref;
   const est = estKml([t]), ppl = recentPpl(), d = new Date(t.start);
+  const gaps = gapsOf(t.track), gapMin = Math.round(gaps.reduce((a, g) => a + g.t1 - g.t0, 0) / 60), gapKm = gaps.reduce((a, g) => a + g.km, 0);
   // km/l instantáneo de cada tramo (escalado a tu rendimiento real); detenido = sin dato
   // km/l instantáneo suavizado: ventana de ~8 s (4 lecturas) para quitar el "ruido" del GPS, como el display del auto
   const pts = ser.pts.map((p, i, arr) => {
@@ -383,10 +395,12 @@ function renderTripDetail() {
       <span class="b6">${shortDate(d.toISOString())} · ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')} · ${fmt(t.km, 1)} km · ${Math.round((new Date(t.end) - d) / 60000)} min</span>
       <span class="small">Consumo estimado <b>${est ? fmt(est, 1) + ' km/l' : '—'}</b>${est && ppl ? ' · ' + money(t.km / est * ppl) : ''} · puntaje ${score(aggregate([t])) ?? '—'}/100</span>
     </div>
+    ${gaps.length ? `<div class="card warn col gap4"><span class="b6">⚠ ${gaps.length === 1 ? 'Hubo 1 pausa' : 'Hubo ' + gaps.length + ' pausas'} sin registrar (${gapMin} min en total)</span>
+      <span class="small">La app no estuvo en pantalla (otra app abierta o pantalla apagada). Faltan unos ${fmt(gapKm, 1)} km en línea recta, marcados con línea gris punteada en el mapa y en gris en los gráficos. El consumo y el puntaje se calculan solo con lo registrado.</span></div>` : ''}
     <div class="trip-map-wrap"><div id="trip-map"></div></div>
     <div class="row gap10 xs muted" style="flex-wrap:wrap"><span><b style="color:#0B6E5A">━</b> rinde más que tu promedio</span><span><b style="color:#5BA48F">━</b> normal</span><span><b style="color:#E8A33D">━</b> gasta más</span><span><b style="color:#D6001C">━</b> gasta mucho (aceleración)</span><span><b style="color:#9AA6AE">━</b> detenido</span></div>
-    <div class="card col gap6"><span class="b6">Velocidad (km/h)</span>${seriesChart(pts, (p) => p.v * 3.6, null, '#14212B')}</div>
-    <div class="card col gap6"><span class="b6">Consumo instantáneo (km/l)</span>${seriesChart(pts, (p) => p.kml, K, null, K)}
+    <div class="card col gap6"><span class="b6">Velocidad (km/h)</span>${seriesChart(pts, (p) => p.v * 3.6, null, '#14212B', null, gaps, t.track)}</div>
+    <div class="card col gap6"><span class="b6">Consumo instantáneo (km/l)</span>${seriesChart(pts, (p) => p.kml, K, null, K, gaps, t.track)}
       <span class="muted xs">La línea punteada es tu promedio (${fmt(K, 1)} km/l). Las caídas fuertes son aceleraciones; los huecos, momentos detenido (gasta en ralentí sin avanzar).</span></div>`;
   // Mapa
   setTimeout(() => {
@@ -395,6 +409,8 @@ function renderTripDetail() {
     tmap = L.map('trip-map', { zoomControl: false, attributionControl: false });
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(tmap);
     pts.forEach((p) => L.polyline([[p.la0, p.lo0], [p.la1, p.lo1]], { color: instColor(p.kml, K), weight: 6, opacity: .9, interactive: false }).addTo(tmap));
+    gaps.forEach((g) => L.polyline([[g.la0, g.lo0], [g.la1, g.lo1]], { color: '#7A8790', weight: 4, dashArray: '4 8', opacity: .9, interactive: false }).addTo(tmap)
+      .bindTooltip(`Sin registrar · ${Math.round((g.t1 - g.t0) / 60)} min`));
     const tr = t.track, a = tr[0], z = tr[tr.length - 1];
     L.circleMarker([a[1], a[2]], { radius: 7, color: '#fff', weight: 3, fillColor: '#0B6E5A', fillOpacity: 1 }).addTo(tmap).bindTooltip('Inicio');
     L.circleMarker([z[1], z[2]], { radius: 7, color: '#fff', weight: 3, fillColor: '#14212B', fillOpacity: 1 }).addTo(tmap).bindTooltip('Fin');
@@ -402,20 +418,22 @@ function renderTripDetail() {
   }, 450);
 }
 // Gráfico de línea a lo largo del tiempo (minutos). colorBy: si se da K, colorea cada tramo como el mapa
-function seriesChart(pts, val, avg, color, K) {
+function seriesChart(pts, val, avg, color, K, gaps, track) {
   const W = 326, H = 120, L0 = 26, B = 18, T = 8;
   const step = Math.max(1, Math.ceil(pts.length / 300)), sp = pts.filter((_, i) => i % step === 0);
   const vals = sp.map(val).filter((x) => x != null);
   if (!vals.length) return '<span class="muted xs">Sin datos.</span>';
-  const hi = Math.max(avg || 0, ...vals) * 1.08, tEnd = sp[sp.length - 1].t || 1;
+  const hi = Math.max(avg || 0, ...vals) * 1.08, tEnd = Math.max(sp[sp.length - 1].t || 1, track && track.length ? track[track.length - 1][0] : 0);
   const x = (t) => L0 + t / tEnd * (W - L0 - 4), y = (v) => T + (1 - v / hi) * (H - T - B);
   let segs = '';
   for (let i = 1; i < sp.length; i++) {
     const a = val(sp[i - 1]), b = val(sp[i]);
     if (a == null || b == null) continue;
+    if ((gaps || []).some((g) => sp[i - 1].t <= g.t0 + 2 && sp[i].t >= g.t1 - 2)) continue; // no unir a través de una pausa
     segs += `<line x1="${x(sp[i - 1].t).toFixed(1)}" y1="${y(a).toFixed(1)}" x2="${x(sp[i].t).toFixed(1)}" y2="${y(b).toFixed(1)}" stroke="${color || instColor(b, K)}" stroke-width="2.2" stroke-linecap="round"/>`;
   }
-  const ticks = [0, hi / 2, hi].map((v) => `<line x1="${L0}" x2="${W}" y1="${y(v)}" y2="${y(v)}" stroke="#EEF2EF"/><text x="${L0 - 4}" y="${y(v) + 3}" font-size="9" fill="#5A6772" text-anchor="end">${Math.round(v)}</text>`).join('');
+  const bands = (gaps || []).map((g) => `<rect x="${x(g.t0).toFixed(1)}" y="${T}" width="${Math.max(2, x(g.t1) - x(g.t0)).toFixed(1)}" height="${H - T - B}" fill="#9AA6AE" opacity=".22"/>`).join('');
+  const ticks = bands + [0, hi / 2, hi].map((v) => `<line x1="${L0}" x2="${W}" y1="${y(v)}" y2="${y(v)}" stroke="#EEF2EF"/><text x="${L0 - 4}" y="${y(v) + 3}" font-size="9" fill="#5A6772" text-anchor="end">${Math.round(v)}</text>`).join('');
   const mins = Math.round(tEnd / 60);
   return `<svg class="tchart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Gráfico a lo largo del viaje">${ticks}
     ${avg ? `<line x1="${L0}" x2="${W}" y1="${y(avg)}" y2="${y(avg)}" stroke="#E8A33D" stroke-width="1.5" stroke-dasharray="4 4"/>` : ''}
@@ -431,3 +449,15 @@ function seriesChart(pts, val, avg, color, K) {
   if (!db.trips) db.trips = [];
   applyTripMode();
 })();
+
+// Al volver a la app durante un viaje: avisar cuánto tiempo quedó sin registrar
+let hiddenAt = null;
+document.addEventListener('visibilitychange', () => {
+  if (!trip) { hiddenAt = null; return; }
+  if (document.hidden) { hiddenAt = Date.now(); return; }
+  if (hiddenAt) {
+    const m = Math.round((Date.now() - hiddenAt) / 60000);
+    if (Date.now() - hiddenAt > GAP_SEC * 1000) toast(m >= 1 ? `El viaje quedó en pausa ${m} min mientras la app no estaba en pantalla.` : 'El viaje quedó en pausa unos segundos mientras la app no estaba en pantalla.');
+    hiddenAt = null;
+  }
+});

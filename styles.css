@@ -320,3 +320,5 @@ select.field{appearance:auto}
 .optwrap.on .opt{box-shadow:none;background:transparent}
 .next-inline{height:50px;font-size:17px;border-radius:14px}
 .next-inline svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.card.warn{background:#FFF6E5;border:1px solid #F2C46D}
+.warn-txt{color:#8A5A00}
