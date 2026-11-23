@@ -7,77 +7,33 @@
    "filtroPesquisa": "",
    "numeroPagina": 1,
    "tamanhoPagina": 5000,
-   "totalRegistro": 45848,
+   "totalRegistro": 45869,
    "totalPagina": 10
   }
  },
  "muestra": [
   {
-   "codigoSIMP": "1305929",
-   "autorizacao": "PR/TO0248293",
-   "dataPublicacao": "26/11/2024",
-   "razaoSocial": "POSTO ICCAR LTDA",
-   "cnpj": "02280133005234",
-   "endereco": "RODOVIA FEDERAL BR 153, KM 627,  S/N",
+   "codigoSIMP": "1007549",
+   "autorizacao": "PR/BA0021452",
+   "dataPublicacao": "18/02/2002",
+   "razaoSocial": "COMERCIAL ACAJUTIBA DERIVADOS DE PETROLEO LTDA. - EPP",
+   "cnpj": "03165189000160",
+   "endereco": "AVENIDA JONAS ALVES,  S/N",
    "complemento": "",
-   "bairro": "ZONA RURAL",
-   "cep": "77455000",
-   "uf": "TO",
-   "municipio": "ALIANCA DO TOCANTINS",
+   "bairro": "MARAMBAIA",
+   "cep": "48360000",
+   "uf": "BA",
+   "municipio": "ACAJUTIBA",
    "distribuidora": "BANDEIRA BRANCA",
-   "dataVinculacao": "26/11/2024",
+   "dataVinculacao": "24/06/2004",
    "classe": "",
    "produtos": [
     {
-     "produto": "GASOLINA C COMUM",
-     "tancagem": 30,
+     "produto": "ETANOL HIDRATADO COMUM",
+     "tancagem": 10,
      "unidMedidaTancagem": "m³",
      "qtdeBicos": 1
     },
-    {
-     "produto": "ÓLEO DIESEL B S10 - COMUM",
-     "tancagem": 120,
-     "unidMedidaTancagem": "m³",
-     "qtdeBicos": 2
-    },
-    {
-     "produto": "ÓLEO DIESEL B S500 - COMUM",
-     "tancagem": 30,
-     "unidMedidaTancagem": "m³",
-     "qtdeBicos": 1
-    }
-   ],
-   "latitude": "",
-   "longitude": "",
-   "latitude_ANP4C": "",
-   "longitude_ANP4C": "",
-   "validacao": "",
-   "estimativaAcuracia": "",
-   "srid": "",
-   "src": "",
-   "dataObtencao": "",
-   "origemInformacao": "",
-   "situacaoConstatada": "",
-   "observacao": "",
-   "statusSIGAF": "",
-   "inadimplenciaPMQC": []
-  },
-  {
-   "codigoSIMP": "1315031",
-   "autorizacao": "PR/SC0251497",
-   "dataPublicacao": "03/12/2025",
-   "razaoSocial": "REDE DE POSTOS M7 LTDA.",
-   "cnpj": "00109576000272",
-   "endereco": "RODOVIA MUNICIPAL JGS 481  GERHARDT GUMZ,  725",
-   "complemento": "",
-   "bairro": "AREA RURAL DE JARAGUA DO SUL",
-   "cep": "89269899",
-   "uf": "SC",
-   "municipio": "JARAGUA DO SUL",
-   "distribuidora": "POTENCIAL",
-   "dataVinculacao": "04/11/2026",
-   "classe": "",
-   "produtos": [
     {
      "produto": "GASOLINA C COMUM",
      "tancagem": 15,
@@ -85,48 +41,110 @@
      "qtdeBicos": 2
     },
     {
-     "produto": "ÓLEO DIESEL B S10 - COMUM",
-     "tancagem": 7.5,
+     "produto": "GASOLINA C COMUM ADITIVADA",
+     "tancagem": 10,
      "unidMedidaTancagem": "m³",
      "qtdeBicos": 1
     },
     {
      "produto": "ÓLEO DIESEL B S500 - COMUM",
-     "tancagem": 7.5,
+     "tancagem": 15,
      "unidMedidaTancagem": "m³",
-     "qtdeBicos": 1
+     "qtdeBicos": 2
     }
    ],
-   "latitude": "-26.54407942",
-   "longitude": "-49.2325511",
-   "latitude_ANP4C": "-26:32:38,686",
-   "longitude_ANP4C": "-49:13:57,184",
+   "latitude": "-11.66187833",
+   "longitude": "-38.03876333",
+   "latitude_ANP4C": "-11:39:42,762",
+   "longitude_ANP4C": "-38:02:19,548",
    "validacao": "Posição Geográfica não validada",
-   "estimativaAcuracia": "",
+   "estimativaAcuracia": "8",
    "srid": "4674",
    "src": "SIRGAS2000",
-   "dataObtencao": "03/11/2026",
-   "origemInformacao": "Preposto da empresa",
-   "situacaoConstatada": "",
+   "dataObtencao": "21/03/2017",
+   "origemInformacao": "Agente de fiscalização da ANP",
+   "situacaoConstatada": "200",
    "observacao": "",
    "statusSIGAF": "",
    "inadimplenciaPMQC": []
   },
   {
-   "codigoSIMP": "1314979",
-   "autorizacao": "PR/BA0251489",
-   "dataPublicacao": "01/12/2025",
-   "razaoSocial": "POSTO GRUTA DA LAPA LTDA",
-   "cnpj": "02268356000721",
-   "endereco": "RODOVIA BR 030  KM 6,  S/N",
+   "codigoSIMP": "1044315",
+   "autorizacao": "PR/AC0191652",
+   "dataPublicacao": "01/06/2006",
+   "razaoSocial": "AUTO POSTO AMAPA LTDA",
+   "cnpj": "00529581000153",
+   "endereco": "VIA CHICO MENDES,  3570",
    "complemento": "",
-   "bairro": "ZONA RURAL",
-   "cep": "46430000",
-   "uf": "BA",
-   "municipio": "GUANAMBI",
-   "distribuidora": "BANDEIRA BRANCA",
-   "dataVinculacao": "01/12/2025",
-   "classe": "",
+   "bairro": "AREAL",
+   "cep": "69906119",
+   "uf": "AC",
+   "municipio": "RIO BRANCO",
+   "distribuidora": "VIBRA",
+   "dataVinculacao": "05/11/2009",
+   "classe": "1 ÁREA  - Classe II - NBR 15514",
+   "produtos": [
+    {
+     "produto": "ETANOL HIDRATADO COMUM",
+     "tancagem": 20,
+     "unidMedidaTancagem": "m³",
+     "qtdeBicos": 6
+    },
+    {
+     "produto": "GASOLINA C COMUM",
+     "tancagem": 30,
+     "unidMedidaTancagem": "m³",
+     "qtdeBicos": 6
+    },
+    {
+     "produto": "GASOLINA C COMUM ADITIVADA",
+     "tancagem": 10,
+     "unidMedidaTancagem": "m³",
+     "qtdeBicos": 4
+    },
+    {
+     "produto": "ÓLEO DIESEL B S10 - ADITIVADO",
+     "tancagem": 30,
+     "unidMedidaTancagem": "m³",
+     "qtdeBicos": 6
+    },
+    {
+     "produto": "ÓLEO DIESEL B S500 - ADITIVADO",
+     "tancagem": 30,
+     "unidMedidaTancagem": "m³",
+     "qtdeBicos": 4
+    }
+   ],
+   "latitude": "-10.006875",
+   "longitude": "-67.80285",
+   "latitude_ANP4C": "-10:00:24,750",
+   "longitude_ANP4C": "-67:48:10,260",
+   "validacao": "Posição Geográfica não validada",
+   "estimativaAcuracia": "4",
+   "srid": "4674",
+   "src": "SIRGAS2000",
+   "dataObtencao": "05/04/2018",
+   "origemInformacao": "Agente de fiscalização da ANP",
+   "situacaoConstatada": "200",
+   "observacao": "",
+   "statusSIGAF": "",
+   "inadimplenciaPMQC": []
+  },
+  {
+   "codigoSIMP": "1036896",
+   "autorizacao": "PR/AC0185293",
+   "dataPublicacao": "22/04/2005",
+   "razaoSocial": "AUTO POSTO ACAUAN LTDA",
+   "cnpj": "00524999000178",
+   "endereco": "RODOVIA AC 40,  1800",
+   "complemento": "",
+   "bairro": "VILA ACRE",
+   "cep": "69902450",
+   "uf": "AC",
+   "municipio": "RIO BRANCO",
+   "distribuidora": "VIBRA",
+   "dataVinculacao": "22/04/2005",
+   "classe": "1 ÁREA  - Classe II - NBR 15514",
    "produtos": [
     {
      "produto": "ETANOL HIDRATADO COMUM",
@@ -136,35 +154,41 @@
     },
     {
      "produto": "GASOLINA C COMUM",
-     "tancagem": 15,
+     "tancagem": 30,
      "unidMedidaTancagem": "m³",
      "qtdeBicos": 4
     },
     {
-     "produto": "ÓLEO DIESEL B S10 - COMUM",
-     "tancagem": 30,
+     "produto": "GASOLINA C COMUM ADITIVADA",
+     "tancagem": 10,
      "unidMedidaTancagem": "m³",
-     "qtdeBicos": 8
+     "qtdeBicos": 4
     },
     {
-     "produto": "ÓLEO DIESEL B S500 - COMUM",
+     "produto": "ÓLEO DIESEL B S10 - ADITIVADO",
+     "tancagem": 20,
+     "unidMedidaTancagem": "m³",
+     "qtdeBicos": 4
+    },
+    {
+     "produto": "ÓLEO DIESEL B S500 - ADITIVADO",
      "tancagem": 30,
      "unidMedidaTancagem": "m³",
      "qtdeBicos": 4
     }
    ],
-   "latitude": "-14.16678603",
-   "longitude": "-42.72256998",
-   "latitude_ANP4C": "-14:10:00,430",
-   "longitude_ANP4C": "-42:43:21,252",
+   "latitude": "-10.02888131",
+   "longitude": "-67.79907867",
+   "latitude_ANP4C": "-10:01:43,973",
+   "longitude_ANP4C": "-67:47:56,683",
    "validacao": "Posição Geográfica não validada",
-   "estimativaAcuracia": "",
+   "estimativaAcuracia": "6",
    "srid": "4674",
    "src": "SIRGAS2000",
-   "dataObtencao": "24/11/2025",
-   "origemInformacao": "Preposto da empresa",
-   "situacaoConstatada": "",
-   "observacao": "",
+   "dataObtencao": "17/08/2017",
+   "origemInformacao": "Agente de fiscalização da ANP",
+   "situacaoConstatada": "200",
+   "observacao": "Ok",
    "statusSIGAF": "",
    "inadimplenciaPMQC": []
   }
